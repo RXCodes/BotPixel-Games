@@ -1,5 +1,6 @@
 var games = {};
 const botFunction = require('./bot');
+const physics = require('./physics');
 
 function generateUUID() {
 	return 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -70,66 +71,13 @@ runGame = function(game) {
 			collisions[Math.round(object.x) + ',' + Math.round(object.y - 0.4)] !==
 			undefined
 		) {
-			object.y++;
+			object.y = Math.ceil(object.y + 0.01) + object.heightHalf;
 			object.yVelocity = 0;
 			object.isOnGround = true;
 		}
-
-		// bottom block detection
-		if (
-			collisions[
-				Math.round(object.x) + ',' + Math.floor(object.y - object.heightHalf)
-			] !== undefined
-		) {
-			if (
-				Math.round(object.y - object.heightHalf + 0.5) >
-				object.y - object.heightHalf
-			) {
-				object.y =
-					Math.floor(object.y - object.heightHalf) + object.heightHalf + 0.5;
-				object.yVelocity = 0;
-				object.isOnGround = true;
-			}
-		}
-
-		// top block detection
-		if (
-			collisions[
-				Math.round(object.x) + ',' + Math.ceil(object.y + object.heightHalf)
-			] !== undefined
-		) {
-			if (
-				Math.round(object.y + object.heightHalf - 0.5) <
-				object.y + object.heightHalf
-			) {
-				object.y =
-					Math.ceil(object.y + object.heightHalf) - object.heightHalf - 0.5;
-				object.yVelocity = -1;
-			}
-		}
-
-		// left blocks detection
-		if (
-			collisions[
-				Math.ceil(object.x - object.widthHalf) +
-					',' +
-					Math.round(object.y - object.heightHalf)
-			] !== undefined ||
-			collisions[
-				Math.ceil(object.x - object.widthHalf) +
-					',' +
-					Math.round(object.y - object.heightHalf + 1)
-			] !== undefined
-		) {
-			if (
-				Math.round(object.x - object.widthHalf) + 0.5 >
-				object.x - object.widthHalf
-			) {
-				object.x = Math.ceil(object.x + object.widthHalf) - object.width + 0.5;
-				object.xVelocity = 0;
-			}
-		}
-
+		
+		object = physics.player(object, collisions)
+		
 		// physical border check
 		object.x = Math.max(game.borderSize / -2, object.x);
 		object.x = Math.min(game.borderSize / 2, object.x);
@@ -141,7 +89,7 @@ runGame = function(game) {
 			playerPhysics(player);
 		}
 	});
-	pushEvent(game.uuid, 'Player Move', game.playerObjects, 'volatile');
+	pushEvent(game.uuid, 'Player Move', game.playerObjects, 'normal');
 };
 
 // end match
