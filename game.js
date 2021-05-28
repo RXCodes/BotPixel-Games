@@ -65,29 +65,27 @@ runGame = function(game) {
 		object.time = Date.now();
 		object.yVelocity += (object.yGravity - object.yVelocity) / (timeDelta * 45);
 		object.xVelocity += (0 - object.xVelocity) / (timeDelta * 45);
-
-		// check if stuck in block
-		while (
-			collisions[Math.round(object.x) + ',' + Math.round(object.y - 0.4)] !==
-			undefined
-		) {
-			object.y = Math.ceil(object.y + 0.01) + object.heightHalf;
-			object.yVelocity = 0;
-			object.isOnGround = true;
-		}
-		
 		object = physics.player(object, collisions)
+		if (collisions[Math.round(object.x) + "," + Math.round(object.y - object.heightHalf)]) {
+		  object.isOnGround = true;
+		}
+		object = physics.player(object, collisions);
 		
 		// physical border check
 		object.x = Math.max(game.borderSize / -2, object.x);
 		object.x = Math.min(game.borderSize / 2, object.x);
 	};
 
+  let playerMovePacket = {};
 	game.playerObjects.forEach(function(player) {
 		botFunction.iterate(player, game);
 		if (game.matchBegins < Date.now()) {
 			playerPhysics(player);
 		}
+		playerMovePacket[player.uuid] = {}
+		playerMovePacket[player.uuid].uuid = player.uuid;
+		playerMovePacket[player.uuid].x = player.x;
+		playerMovePacket[player.uuid].y = player.y;
 	});
 	pushEvent(game.uuid, 'Player Move', game.playerObjects, 'normal');
 };

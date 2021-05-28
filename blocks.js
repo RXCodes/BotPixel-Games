@@ -1,5 +1,6 @@
 const passableBlocks = ['Oak Log', 'Birch Log'];
 const glowingBlocks = ['Glowing Amber', 'Deep Glowing Amber'];
+const usefulBlocks = ["Oak Log", "Birch Log"];
 
 var blocks = {};
 
@@ -21,6 +22,12 @@ const blockCheck = function() {
 	glowingBlocks.forEach(function(block) {
 		check(block);
 		blocks[block].glowing = true;
+	});
+	
+	// set useful blocks
+	usefulBlocks.forEach(function(block) {
+		check(block);
+		blocks[block].useful = true;
 	});
 	
 	return blocks;

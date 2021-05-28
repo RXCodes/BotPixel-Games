@@ -45,6 +45,7 @@ var generateWorld = function(chunkSize = 5) {
 	let blocksPlaced = 0;
 	let chunks = {};
 	let lightBlocks = {};
+	let interests = {};
 
 	// populate sine
 	for (i = 0; i < settings.sineCount; i++) {
@@ -91,11 +92,15 @@ var generateWorld = function(chunkSize = 5) {
 		blocksPlaced++;
 	  delete lightBlocks[position];
 	  delete collisions[position];
+	  delete interests[position];
 	  if ((blocksJSON[id] || {}).glowing !== undefined) {
 	    lightBlocks[position] = id;
 	  }
 	  if ((blocksJSON[id] || {}).passable == undefined) {
 	    collisions[position] = true;
+	  }
+	  if ((blocksJSON[id] || {}).useful !== undefined) {
+	    interests[position] = id;
 	  }
 	};
 
@@ -411,7 +416,8 @@ var generateWorld = function(chunkSize = 5) {
 		blocksDestroyed,
 		blocksPlaced,
 		collisions,
-		chunks
+		chunks,
+		interests
 	};
 };
 
