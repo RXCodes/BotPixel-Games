@@ -5,7 +5,7 @@ const settings = {
 	minSineFrequency: 0.1,
 	maxSineFrequency: 0.7,
 	minSineMultiplier: 0.5,
-	maxSineMultiplier: 100,
+	maxSineMultiplier: 25,
 	caveCount: 8,
 	caveSizeRange: 5,
 	caveMinSize: 2,

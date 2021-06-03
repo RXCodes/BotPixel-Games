@@ -1,6 +1,8 @@
 var games = {};
 const botFunction = require('./bot');
 const physics = require('./physics');
+const blockDataScope = require('./blocks');
+blocksJSON = {};
 
 function generateUUID() {
 	return 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -12,15 +14,18 @@ function generateUUID() {
 
 // start match
 startMatch = function(world, uuid) {
+	blocksJSON = blockDataScope.blocks();
 	games[uuid] = {
 		world: world.world,
 		collisions: world.collisions,
+		interests: world.interests,
 		playerObjects: [],
 		startTime: Date.now(),
 		matchBegins: Date.now() + 20.9 * 1000,
 		uuid,
 		borderSize: 100,
-		playzoneSize: 105
+		playzoneSize: 105,
+		updateChunks: {}
 	};
 
 	let spawnPlayer = function(x, y) {
@@ -51,13 +56,13 @@ startMatch = function(world, uuid) {
 };
 
 // iterate through each game
-runGame = function(game) {
+const runGame = function(game) {
 	let world = game.world;
 	let collisions = game.collisions;
 
 	let playerPhysics = function(object) {
 		object.isOnGround = false;
-		
+
 		// physical movement
 		object.y += object.yVelocity;
 		object.x += object.xVelocity;
@@ -65,29 +70,126 @@ runGame = function(game) {
 		object.time = Date.now();
 		object.yVelocity += (object.yGravity - object.yVelocity) / (timeDelta * 45);
 		object.xVelocity += (0 - object.xVelocity) / (timeDelta * 45);
-		object = physics.player(object, collisions)
-		if (collisions[Math.round(object.x) + "," + Math.round(object.y - object.heightHalf)]) {
-		  object.isOnGround = true;
-		}
 		object = physics.player(object, collisions);
-		
+		if (
+			collisions[
+				Math.round(object.x) + ',' + Math.round(object.y - object.heightHalf)
+			]
+		) {
+			object.isOnGround = true;
+		}
+
+		// on ground duration
+		if (object.isOnGround == true) {
+			object.isOnGroundDuration++;
+		} else {
+			object.isOnGroundDuration = 0;
+		}
+
+		object = physics.player(object, collisions);
+
 		// physical border check
 		object.x = Math.max(game.borderSize / -2, object.x);
 		object.x = Math.min(game.borderSize / 2, object.x);
 	};
 
-  let playerMovePacket = {};
 	game.playerObjects.forEach(function(player) {
 		botFunction.iterate(player, game);
 		if (game.matchBegins < Date.now()) {
 			playerPhysics(player);
 		}
-		playerMovePacket[player.uuid] = {}
-		playerMovePacket[player.uuid].uuid = player.uuid;
-		playerMovePacket[player.uuid].x = player.x;
-		playerMovePacket[player.uuid].y = player.y;
 	});
 	pushEvent(game.uuid, 'Player Move', game.playerObjects, 'normal');
+};
+
+// world interaction
+pushEvent = function(worldUUID, event, data, type = 'normal') {
+	gameEvents.push({
+		uuid: worldUUID,
+		event,
+		data,
+		type
+	});
+};
+
+// request a chunk update given block coordinates
+const updateChunk = function(worldUUID, x, y, chunkSize = 5) {
+	let chunkX = Math.round(x / chunkSize);
+	let chunkY = Math.round(y / chunkSize);
+	let chunkStr = chunkX + ',' + chunkY;
+	games[worldUUID].updateChunks[chunkStr] = {
+		x: chunkX,
+		y: chunkY
+	};
+};
+
+// destroy a block at a given position
+const destroyBlock = function(worldUUID, x, y) {
+	let position = x + ',' + y;
+	pushEvent(worldUUID, 'Destroy Block', {
+		x,
+		y,
+		block: games[worldUUID][position]
+	});
+	delete games[worldUUID].world[position];
+	delete games[worldUUID].collisions[position];
+	updateChunk(worldUUID, x, y);
+};
+
+// place a block at a given position
+const placeBlock = function(worldUUID, x, y, block, blockData) {
+	let position = x + ',' + y;
+	pushEvent(worldUUID, 'Place Block', {
+		x,
+		y,
+		block,
+		blockData
+	});
+	games[worldUUID].world[position] = block;
+	if (!blocksJSON[block].passable) {
+		games[worldUUID].collisions[position] = true;
+	}
+	updateChunk(worldUUID, x, y);
+};
+
+// send chunk updates to player
+const sendChunkUpdates = function(game) {
+	let chunkSize = 5;
+	let chunkSizeHalf = Math.floor(chunkSize / 2);
+
+	// for each chunk
+	Object.keys(game.updateChunks).forEach(function(chunk) {
+		// get chunk position
+		let chunkPos = game.updateChunks[chunk];
+		let chunkX = chunkPos.x;
+		let chunkY = chunkPos.y;
+
+		// get updated chunk data
+		let blocks = {};
+		for (x = -chunkSizeHalf; x < chunkSizeHalf; x++) {
+			for (y = -chunkSizeHalf; y < chunkSizeHalf; y++) {
+				// get block position
+				let blockX = chunkX * chunkSize + x;
+				let blockY = chunkY * chunkSize + y;
+
+				// get block data
+				let id = game.world[blockX + ',' + blockY];
+				if (id !== undefined) {
+					blocks[x + chunkSizeHalf + ',' + (y + chunkSizeHalf)] = id;
+				}
+			}
+		}
+
+		// send chunk update
+		pushEvent(game.uuid, 'Chunk Update', {
+			x: chunkX,
+			y: chunkY,
+			data: blocks
+		});
+	});
+	
+	// clear chunk updates
+	game.updateChunks = {};
 };
 
 // end match
@@ -100,18 +202,10 @@ var gameClock = function() {
 	Object.keys(games).forEach(function(uuid) {
 		if ((Date.now() - games[uuid].startTime) / 1000 < 60 * 20) {
 			runGame(games[uuid]);
+			sendChunkUpdates(games[uuid]);
 		} else {
 			endMatch(uuid);
 		}
-	});
-};
-
-pushEvent = function(worldUUID, event, data, type) {
-	gameEvents.push({
-		uuid: worldUUID,
-		event,
-		data,
-		type
 	});
 };
 
@@ -129,3 +223,6 @@ exports.endMatch = endMatch;
 exports.gameClock = gameClock;
 exports.gameEvents = fetchGameEvents;
 exports.clearEvents = clearEvents;
+exports.placeBlock = placeBlock;
+exports.destroyBlock = destroyBlock;
+exports.emit = pushEvent;
