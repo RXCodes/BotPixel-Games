@@ -46,7 +46,7 @@ var playerPhysics = function(object, collisions) {
 			object.xVelocity = -0.1;
 		}
 		let xPos = Math.round(object.x);
-		let yPos = Math.round(object.y);
+		let yPos = Math.round(object.y - object.heightHalf);
 		if (object.y > y && collisions[xPos + "," + yPos] !== undefined) {
 			object.y = y + 0.5 + object.heightHalf;
 			object.yVelocity = 0;

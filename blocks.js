@@ -5,7 +5,7 @@ const blockBreakingTime = {
 	Bedrock: 9999,
 	'Bedrock Body Fossil': 9999,
 	'Bedrock Fossil': 9999,
-	'Bedrock Rip Fossil': 9999,
+	'Bedrock Rib Fossil': 9999,
 	Basalt: 2,
 	'Birch Leaves': 0.3,
 	'Birch Log': 0.7,
@@ -45,6 +45,50 @@ const blockBreakingTime = {
 	'Tilled Rooted Grass Right': 0.5
 };
 
+const blockBreakSoundFX = {
+	Bedrock: 'Bedrock',
+	'Bedrock Body Fossil': 'Bedrock Fossil',
+	'Bedrock Fossil': 'Bedrock Fossil',
+	'Bedrock Rib Fossil': 'Bedrock Fossil',
+	Basalt: 'Basalt',
+	'Birch Leaves': 'Leaves',
+	'Birch Log': 'Wood',
+	'Birch Planks': 'Wood',
+	'Body Fossil': 'Stone Fossil',
+	'Deep Bixbite Ore': 'Deep Ore',
+	'Deep Body Fossil': 'Deep Fossil',
+	'Deep Fossil': 'Deep Fossil',
+	'Deep Glowing Amber': 'Deep Amber',
+	'Deep Gold Ore': 'Deep Ore',
+	'Deep Rib Fossil': 'Deep Fossil',
+	'Diamond Ore': 'Diamond Ore',
+	Dirt: 'Dirt',
+	'Dirty Stone': 'Stone',
+	Fossil: 'Stone Fossil',
+	'Fossil 2': 'Stone Fossil',
+	'Glowing Amber': 'Amber',
+	'Gold Ore': 'Ore',
+	Grass: 'Grass',
+	'Grass Left': 'Grass',
+	'Grass Right': 'Grass',
+	Gravel: 'Dirt',
+	Kimberlite: 'Deep Fossil',
+	'Oak Leaves': 'Leaves',
+	'Oak Log': 'Wood',
+	'Oak Planks': 'Wood',
+	'Rib Fossil': 'Stone Fossil',
+	'Rooted Dirt': 'Dirt',
+	'Rooted Grass': 'Grass',
+	'Rooted Grass Left': 'Grass',
+	'Rooted Grass Right': 'Grass',
+	'Standalone Grass': 'Grass',
+	Stone: 'Stone',
+	'Tilled Rooted Dirt': 'Dirt',
+	'Tilled Rooted Grass': 'Grass',
+	'Tilled Rooted Grass Left': 'Grass',
+	'Tilled Rooted Grass Right': 'Grass'
+};
+
 var blocks = {};
 
 const blockCheck = function() {
@@ -74,11 +118,28 @@ const blockCheck = function() {
 
 	// set breaking time property
 	Object.keys(blockBreakingTime).forEach(function(block) {
-	  check(block);
-	  blocks[block].breakDuration = blockBreakingTime[block];
+		check(block);
+		blocks[block].breakDuration = blockBreakingTime[block];
+	});
+	
+	// set break sound fx property
+	Object.keys(blockBreakSoundFX).forEach(function(block) {
+		check(block);
+		blocks[block].breakSound = blockBreakSoundFX[block];
 	});
 
 	return blocks;
 };
 
+const getBlockData = function() {
+	let data = {
+		breakingSoundFX: blockBreakSoundFX,
+		blockBreakingTime,
+		passableBlocks,
+		glowingBlocks
+	};
+	return data;
+};
+
 exports.blocks = blockCheck;
+exports.get = getBlockData;

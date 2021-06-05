@@ -264,7 +264,7 @@ var generateWorld = function(chunkSize = 5) {
 		let size =
 			Math.random() * settings.dirtBallSizeRange + settings.dirtBallMinSize;
 		if (y > settings.deepLayerLevel) {
-			if (Math.random() < 0.35) {
+			if (Math.random() < 0.3) {
 				setRadius(x, y, size, 'Gravel');
 			} else {
 				setRadius(x, y, size, 'Dirt');

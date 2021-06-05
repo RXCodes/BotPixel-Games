@@ -78,6 +78,11 @@ const runGame = function(game) {
 		) {
 			object.isOnGround = true;
 		}
+		
+		// check if stuck in ground
+		while (collisions[Math.round(object.x) + "," + Math.round(object.y - 0.3)] !== undefined) {
+		  object.y++;
+		}
 
 		// on ground duration
 		if (object.isOnGround == true) {
@@ -124,15 +129,18 @@ const updateChunk = function(worldUUID, x, y, chunkSize = 5) {
 };
 
 // destroy a block at a given position
-const destroyBlock = function(worldUUID, x, y) {
+const destroyBlock = function(worldUUID, x, y, uuid = "bot") {
 	let position = x + ',' + y;
 	pushEvent(worldUUID, 'Destroy Block', {
 		x,
 		y,
-		block: games[worldUUID][position]
+		block: games[worldUUID].world[position],
+		sound: (blocksJSON[games[worldUUID].world[position]] || {}).breakSound,
+		uuid
 	});
 	delete games[worldUUID].world[position];
 	delete games[worldUUID].collisions[position];
+	delete games[worldUUID].interests[position];
 	updateChunk(worldUUID, x, y);
 };
 
@@ -166,8 +174,8 @@ const sendChunkUpdates = function(game) {
 
 		// get updated chunk data
 		let blocks = {};
-		for (x = -chunkSizeHalf; x < chunkSizeHalf; x++) {
-			for (y = -chunkSizeHalf; y < chunkSizeHalf; y++) {
+		for (x = -chunkSizeHalf; x <= chunkSizeHalf; x++) {
+			for (y = -chunkSizeHalf; y <= chunkSizeHalf; y++) {
 				// get block position
 				let blockX = chunkX * chunkSize + x;
 				let blockY = chunkY * chunkSize + y;
@@ -175,7 +183,15 @@ const sendChunkUpdates = function(game) {
 				// get block data
 				let id = game.world[blockX + ',' + blockY];
 				if (id !== undefined) {
-					blocks[x + chunkSizeHalf + ',' + (y + chunkSizeHalf)] = id;
+				  let xLocation = x + chunkSizeHalf + 0;
+				  let yLocation = y + chunkSizeHalf + 0;
+				  if (xLocation == -0) {
+				    xLocation = 0;
+				  }
+				  if (yLocation == -0) {
+				    yLocation = 0;
+				  }
+					blocks[xLocation + ',' + yLocation] = id;
 				}
 			}
 		}

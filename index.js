@@ -10,6 +10,7 @@ const path = require('path');
 const leaderboards = require('./leaderboard');
 const worldGen = require('./worldgen');
 const gameHandler = require('./game');
+const blockData = require('./blocks');
 
 // function that tells if a given string input is a JSON object or not
 const isDictionary = function(input) {
@@ -110,6 +111,11 @@ io.on('connection', function(socket) {
 		socket.room = roomUUID;
 		io.to(socket.id).emit('open world', world.world, world.chunks);
 	});
+	
+	socket.on('get block data', function(packet, callback) {
+	  callback(blockData.get());
+	});
+	
 });
 
 // run game clock
