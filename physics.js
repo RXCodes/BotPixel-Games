@@ -51,7 +51,8 @@ var playerPhysics = function(object, collisions) {
 			object.y = y + 0.5 + object.heightHalf;
 			object.yVelocity = 0;
 		}
-		if (object.y < y) {
+		yPos = Math.round(object.y + object.heightHalf);
+		if (object.y < y && collisions[xPos + "," + yPos] !== undefined) {
 			object.y = y - 0.5 - object.heightHalf - planckDistance;
 			object.yVelocity = -0.1;
 		}

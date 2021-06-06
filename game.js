@@ -45,7 +45,8 @@ startMatch = function(world, uuid) {
 			inventory: [],
 			health: 100,
 			isOnGround: false,
-			uuid: generateUUID()
+			uuid: generateUUID(),
+			xFlip: 0
 		};
 		games[uuid].playerObjects.push(object);
 	};
@@ -73,15 +74,18 @@ const runGame = function(game) {
 		object = physics.player(object, collisions);
 		if (
 			collisions[
-				Math.round(object.x) + ',' + Math.round(object.y - object.heightHalf)
+				Math.round(object.x) + ',' + Math.round(object.y - object.heightHalf - 0.5)
 			]
 		) {
 			object.isOnGround = true;
 		}
 		
-		// check if stuck in ground
-		while (collisions[Math.round(object.x) + "," + Math.round(object.y - 0.3)] !== undefined) {
-		  object.y++;
+		// flip functionality
+		if (object.xVelocity < 0) {
+		  object.xFlip = 1;
+		}
+		if (object.xVelocity > 0) {
+		  object.xFlip = 0;
 		}
 
 		// on ground duration
@@ -98,13 +102,20 @@ const runGame = function(game) {
 		object.x = Math.min(game.borderSize / 2, object.x);
 	};
 
+  let playerMovePacket = [];
+  let requireKeys = ["x", "y", "uuid", "health", "xFlip"];
 	game.playerObjects.forEach(function(player) {
 		botFunction.iterate(player, game);
 		if (game.matchBegins < Date.now()) {
 			playerPhysics(player);
 		}
+		let packet = {};
+		requireKeys.forEach(function(key) {
+		  packet[key] = player[key];
+		});
+		playerMovePacket.push(packet);
 	});
-	pushEvent(game.uuid, 'Player Move', game.playerObjects, 'normal');
+	pushEvent(game.uuid, 'Player Move', playerMovePacket, 'normal');
 };
 
 // world interaction
@@ -136,7 +147,7 @@ const destroyBlock = function(worldUUID, x, y, uuid = "bot") {
 		y,
 		block: games[worldUUID].world[position],
 		sound: (blocksJSON[games[worldUUID].world[position]] || {}).breakSound,
-		uuid
+		uuid: uuid
 	});
 	delete games[worldUUID].world[position];
 	delete games[worldUUID].collisions[position];

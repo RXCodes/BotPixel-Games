@@ -102,7 +102,7 @@ io.on('connection', function(socket) {
 
 	socket.on('start game', function(packet, callback) {
 		let world = worldGen.generateWorld();
-		let roomUUID = generateUUID() + '-game';
+		let roomUUID = socket.id + '-game';
 		if (socket.room) {
 			socket.leave(socket.room);
 		}
