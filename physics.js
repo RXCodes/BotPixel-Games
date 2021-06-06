@@ -39,11 +39,11 @@ var playerPhysics = function(object, collisions) {
 		let planckDistance = 0.01;
 		if (object.x > x) {
 			object.x = x + 0.5 + object.widthHalf + planckDistance;
-			object.xVelocity = 0.1;
+			object.xVelocity = 0;
 		}
 		if (object.x < x) {
 			object.x = x - 0.5 - object.widthHalf - planckDistance;
-			object.xVelocity = -0.1;
+			object.xVelocity = 0;
 		}
 		let xPos = Math.round(object.x);
 		let yPos = Math.round(object.y - object.heightHalf);

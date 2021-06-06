@@ -2,6 +2,7 @@ var games = {};
 const botFunction = require('./bot');
 const physics = require('./physics');
 const blockDataScope = require('./blocks');
+const blockUpdate = require('./blockupdates');
 blocksJSON = {};
 
 function generateUUID() {
@@ -152,6 +153,7 @@ const destroyBlock = function(worldUUID, x, y, uuid = "bot") {
 	delete games[worldUUID].world[position];
 	delete games[worldUUID].collisions[position];
 	delete games[worldUUID].interests[position];
+	blockUpdate.update(x, y, games[worldUUID].world);
 	updateChunk(worldUUID, x, y);
 };
 
@@ -168,6 +170,7 @@ const placeBlock = function(worldUUID, x, y, block, blockData) {
 	if (!blocksJSON[block].passable) {
 		games[worldUUID].collisions[position] = true;
 	}
+	blockUpdate.update(x, y, games[worldUUID].world);
 	updateChunk(worldUUID, x, y);
 };
 
