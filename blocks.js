@@ -88,6 +88,43 @@ const blockBreakSoundFX = {
 	'Tilled Rooted Grass Left': 'Grass',
 	'Tilled Rooted Grass Right': 'Grass'
 };
+const lootTable = {
+	Basalt: 'Basalt',
+	'Birch Log': 'Birch Log',
+	'Birch Planks': 'Birch Planks',
+	'Body Fossil': 'Stone',
+	'Deep Bixbite Ore': 'Bixbite',
+	'Deep Body Fossil': 'Basalt',
+	'Deep Fossil': 'Basalt',
+	'Deep Glowing Amber': 'Amber',
+	'Deep Gold Ore': 'Gold',
+	'Deep Rib Fossil': 'Basalt',
+	'Diamond Ore': 'Diamond',
+	Dirt: 'Dirt',
+	'Dirty Stone': 'Stone',
+	Fossil: 'Stone',
+	'Fossil 2': 'Stone',
+	'Glowing Amber': 'Amber',
+	'Gold Ore': 'Gold',
+	Grass: 'Dirt',
+	'Grass Left': 'Dirt',
+	'Grass Right': 'Dirt',
+	Gravel: 'Gravel',
+	Kimberlite: 'Kimberlite',
+	'Oak Log': 'Oak Log',
+	'Oak Planks': 'Oak Planks',
+	'Rib Fossil': 'Stone',
+	'Rooted Dirt': 'Dirt',
+	'Rooted Grass': 'Dirt',
+	'Rooted Grass Left': 'Dirt',
+	'Rooted Grass Right': 'Dirt',
+	'Standalone Grass': 'Dirt',
+	Stone: 'Stone',
+	'Tilled Rooted Dirt': 'Dirt',
+	'Tilled Rooted Grass': 'Dirt',
+	'Tilled Rooted Grass Left': 'Dirt',
+	'Tilled Rooted Grass Right': 'Dirt'
+};
 
 var blocks = {};
 
@@ -121,11 +158,17 @@ const blockCheck = function() {
 		check(block);
 		blocks[block].breakDuration = blockBreakingTime[block];
 	});
-	
+
 	// set break sound fx property
 	Object.keys(blockBreakSoundFX).forEach(function(block) {
 		check(block);
 		blocks[block].breakSound = blockBreakSoundFX[block];
+	});
+	
+	// set break sound fx property
+	Object.keys(lootTable).forEach(function(block) {
+		check(block);
+		blocks[block].drops = lootTable[block];
 	});
 
 	return blocks;
@@ -136,7 +179,8 @@ const getBlockData = function() {
 		breakingSoundFX: blockBreakSoundFX,
 		blockBreakingTime,
 		passableBlocks,
-		glowingBlocks
+		glowingBlocks,
+		lootTable
 	};
 	return data;
 };

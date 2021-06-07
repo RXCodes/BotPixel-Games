@@ -187,7 +187,7 @@ var iterate = function(bot, game) {
 		  }
 		  
 		  // if the bot is not getting closer to the destination and is taking too long
-		  if (bot.distancePenalties > 5 && bot.travelTime >= 80 && bot.mining == false) {
+		  if (bot.distancePenalties > 10 && bot.travelTime >= 80 && bot.mining == false) {
 		    bot.status = "Mining";
 		    bot.busy = false;
 		    bot.debugChat("can't reach there.")
