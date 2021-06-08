@@ -111,6 +111,22 @@ const deleteSlot = function(inventory, slot) {
   
 }
 
+// swap slots
+const swapSlots = function(inventory, slotA, slotB) {
+  
+  // check it both slots contain items
+  if (inventory[slotA] == undefined || inventory[slotB] == undefined) {
+    return inventory;
+  }
+  
+  // swap and return inventory
+  let x = inventory[slotA];
+  inventory[slotA] = inventory[slotB];
+  inventory[slotB] = x;
+  return inventory;
+}
+
 exports.give = storeItem;
 exports.count = checkForBlocks;
 exports.clear = deleteSlot;
+exports.swap = swapSlots;

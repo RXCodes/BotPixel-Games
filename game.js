@@ -296,4 +296,4 @@ exports.clearEvents = clearEvents;
 exports.placeBlock = placeBlock;
 exports.destroyBlock = destroyBlock;
 exports.emit = pushEvent;
-exports.summonItem = spawnItem;
+exports.summonItem = summonItem;
