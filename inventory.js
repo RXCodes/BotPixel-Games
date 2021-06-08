@@ -63,7 +63,8 @@ const storeItem = function(inventory, item, count) {
 	// if no items were picked up at all, return an error
 	return {
 	  inventory,
-	  success: false
+	  success: false,
+	  leftOver: count
 	}
 	
 };
@@ -110,6 +111,6 @@ const deleteSlot = function(inventory, slot) {
   
 }
 
-exports.storeItem = storeItem;
-exports.countBlocks = checkForBlocks;
-exports.clearSlot = deleteSlot;
+exports.give = storeItem;
+exports.count = checkForBlocks;
+exports.clear = deleteSlot;

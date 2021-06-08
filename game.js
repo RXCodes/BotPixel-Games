@@ -3,6 +3,8 @@ const botFunction = require('./bot');
 const physics = require('./physics');
 const blockDataScope = require('./blocks');
 const blockUpdate = require('./blockupdates');
+const inventory = require('./inventory');
+const maxItemLifetime = 30;
 blocksJSON = {};
 
 function generateUUID() {
@@ -26,7 +28,8 @@ startMatch = function(world, uuid) {
 		uuid,
 		borderSize: 100,
 		playzoneSize: 105,
-		updateChunks: {}
+		updateChunks: {},
+		itemEntities: []
 	};
 
 	let spawnPlayer = function(x, y) {
@@ -62,6 +65,7 @@ const runGame = function(game) {
 	let world = game.world;
 	let collisions = game.collisions;
 
+  // player physics
 	let playerPhysics = function(object) {
 		object.isOnGround = false;
 
@@ -117,6 +121,34 @@ const runGame = function(game) {
 		playerMovePacket.push(packet);
 	});
 	pushEvent(game.uuid, 'Player Move', playerMovePacket, 'normal');
+	
+	// item drops
+	game.itemEntities.forEach(function(item) {
+	  item.lifetime += 0.1;
+	  
+	  // check if item expires past lifetime
+	  let index = 0;
+	  if (item.lifetime > maxItemLifetime) {
+	    game.itemEntities[index] = "delete";
+	  } else {
+	    item.y -= 0.3;
+	    if (game.world[Math.round(item.x) + "," +  Math.round(item.y - 0.35)] !== undefined) {
+	      item.y = Math.max(Math.round(item.y - 0.35) + 0.5, item.y - 0.25)
+	    }
+	  }
+	  index++;
+	});
+	
+	// delete item drops and send data to players 
+	let itemsArray = [];
+	game.itemEntities.forEach(function(item) {
+	  if (item !== "delete") {
+	    itemsArray.push(item);
+	  }
+	});
+	game.itemEntities = itemsArray;
+	pushEvent(game.uuid, 'Items Move', itemsArray, 'normal');
+	
 };
 
 // world interaction
@@ -153,7 +185,7 @@ const destroyBlock = function(worldUUID, x, y, uuid = "bot") {
 	delete games[worldUUID].world[position];
 	delete games[worldUUID].collisions[position];
 	delete games[worldUUID].interests[position];
-	blockUpdate.update(x, y, games[worldUUID].world);
+	games[worldUUID].world = blockUpdate.update(x, y, games[worldUUID].world);
 	updateChunk(worldUUID, x, y);
 };
 
@@ -170,9 +202,17 @@ const placeBlock = function(worldUUID, x, y, block, blockData) {
 	if (!blocksJSON[block].passable) {
 		games[worldUUID].collisions[position] = true;
 	}
-	blockUpdate.update(x, y, games[worldUUID].world);
+	games[worldUUID].world = blockUpdate.update(x, y, games[worldUUID].world);
 	updateChunk(worldUUID, x, y);
 };
+
+// summon an item at a given position
+const summonItem = function(uuid, x, y, item, count) {
+  let itemData = {
+    x, y, item, count, lifetime: 0
+  }
+  games[uuid].itemEntities.push(itemData);
+}
 
 // send chunk updates to player
 const sendChunkUpdates = function(game) {
@@ -256,3 +296,4 @@ exports.clearEvents = clearEvents;
 exports.placeBlock = placeBlock;
 exports.destroyBlock = destroyBlock;
 exports.emit = pushEvent;
+exports.summonItem = spawnItem;

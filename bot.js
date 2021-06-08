@@ -41,6 +41,31 @@ var iterate = function(bot, game) {
 		// break block function
 		bot.break = function(x, y) {
 			world.destroyBlock(uuid, x, y, bot.uuid);
+			blockData = blocksJSON[game.world[x + ',' + y]];
+			if (blockData !== undefined) {
+				if (blockData.drops !== undefined) {
+					let give = inventory.give(bot.inventory, blockData.drops, 1);
+					bot.inventory = give.inventory;
+					if (give.success) {
+						world.emit(
+							'Pick Up Item',
+							{
+								x,
+								y,
+								item: blockData.drops,
+								uuid: bot.uuid
+							},
+							'volatile'
+						);
+					}
+					if (give.leftOver > 0 && give.success) {
+					  world.summonItem(uuid, bot.x, bot.y, blockData.drops, give.leftOver);
+					}
+					if (!give.success) {
+					  world.summonItem(uuid, x, y, blockData.drops, give.leftOver);
+					}
+				}
+			}
 		};
 
 		// append to blocks to break
@@ -50,14 +75,14 @@ var iterate = function(bot, game) {
 				bot.mining = true;
 			}
 		};
-		
+
 		// bot debug chat
 		bot.debugChat = function(msg) {
-		  world.emit(uuid, 'Debug Chat', {
-		    uuid: bot.uuid,
-		    msg
-		  });
-		}
+			world.emit(uuid, 'Debug Chat', {
+				uuid: bot.uuid,
+				msg
+			});
+		};
 
 		// check block collision
 		bot.checkCollision = function(x, y) {
@@ -112,7 +137,6 @@ var iterate = function(bot, game) {
 
 	// constantly find resources
 	if (Math.random() < 0.1 && bot.busy !== true) {
-
 		// search for nearest features
 		let success = false;
 		const search = function() {
@@ -129,20 +153,19 @@ var iterate = function(bot, game) {
 					bot.busy = true;
 					bot.currentDistance = 9999;
 					bot.distancePenalties = 0;
-					bot.debugChat("found destination.");
+					bot.debugChat('found destination.');
 					return;
 				}
 			});
 		};
 		search();
 		if (!success) {
-		  bot.status = "Mining";
+			bot.status = 'Mining';
 		}
 	}
 
 	// travel to destination
 	if (bot.status == 'Travelling') {
-
 		// horizontal movement
 		if (bot.x < bot.destination.x) {
 			if (bot.checkCollision(1, 1)) {
@@ -164,7 +187,7 @@ var iterate = function(bot, game) {
 
 		// vertical movement
 		if (bot.y - 0.5 < bot.destination.y) {
-		  bot.jump();
+			bot.jump();
 			if (bot.checkCollision(0, 2)) {
 				bot.pushBreak(bot.getPos(0, 2).x, bot.getPos(0, 2).y);
 			}
@@ -174,39 +197,47 @@ var iterate = function(bot, game) {
 				bot.pushBreak(bot.getPos(0, -1).x, bot.getPos(0, -1).y);
 			}
 		}
-		
+
 		// sense of time while travelling
 		bot.travelTime++;
 		if (bot.travelTime % 5 == 0) {
-		  
-		  // is the bot getting closer to the destination?
-		  if (bot.currentDistance > distance(bot.x, bot.y, bot.destination.x, bot.destination.y)) {
-		    bot.currentDistance = distance(bot.x, bot.y, bot.destination.x, bot.destination.y);
-		  } else {
-		    bot.distancePenalties++;
-		  }
-		  
-		  // if the bot is not getting closer to the destination and is taking too long
-		  if (bot.distancePenalties > 10 && bot.travelTime >= 80 && bot.mining == false) {
-		    bot.status = "Mining";
-		    bot.busy = false;
-		    bot.debugChat("can't reach there.")
-		  }
-		  
+			// is the bot getting closer to the destination?
+			if (
+				bot.currentDistance >
+				distance(bot.x, bot.y, bot.destination.x, bot.destination.y)
+			) {
+				bot.currentDistance = distance(
+					bot.x,
+					bot.y,
+					bot.destination.x,
+					bot.destination.y
+				);
+			} else {
+				bot.distancePenalties++;
+			}
+
+			// if the bot is not getting closer to the destination and is taking too long
+			if (
+				bot.distancePenalties > 10 &&
+				bot.travelTime >= 80 &&
+				bot.mining == false
+			) {
+				bot.status = 'Mining';
+				bot.busy = false;
+				bot.debugChat("can't reach there.");
+			}
 		}
-		
 	}
 
 	// bot has arrived at destination while travelling
 	if (bot.status == 'Travelling') {
 		if (distance(bot.x, bot.y, bot.destination.x, bot.destination.y) < 4) {
-
 			// check for reason for going to this destination
 			bot.travelTime = 0;
-			bot.debugChat("successfully entered destination.");
+			bot.debugChat('successfully entered destination.');
 			let xDest = bot.destination.x;
 			let yDest = bot.destination.y;
-			let reason = game.world[xDest + "," + yDest];
+			let reason = game.world[xDest + ',' + yDest];
 
 			// react to reason
 			let takeAction = function() {
@@ -215,21 +246,23 @@ var iterate = function(bot, game) {
 					bot.status = 'Harvesting Wood';
 					bot.pushBreak(xDest, yDest);
 					let logBreak = function(x, y) {
-					  if (game.world[x + "," + y] == 'Oak Log' ||
-						game.world[x + "," + y] == 'Birch Log') {
-						  bot.pushBreak(x, y);
+						if (
+							game.world[x + ',' + y] == 'Oak Log' ||
+							game.world[x + ',' + y] == 'Birch Log'
+						) {
+							bot.pushBreak(x, y);
 						}
-					}
+					};
 					for (a = 1; a < 4; a++) {
-					  logBreak(xDest, yDest - a);
-					  logBreak(xDest, yDest + a);
+						logBreak(xDest, yDest - a);
+						logBreak(xDest, yDest + a);
 					}
 					bot.busy = true;
 					return;
 				}
 
 				// no reason found
-				bot.status = "Idle";
+				bot.status = 'Idle';
 				bot.busy = false;
 			};
 			takeAction();
@@ -278,7 +311,7 @@ var iterate = function(bot, game) {
 					time: blockBreakingTime
 				});
 			} else if (bot.mineDuration % 3 == 0) {
-			  world.emit(uuid, 'Mine Move', {
+				world.emit(uuid, 'Mine Move', {
 					x,
 					y,
 					uuid: bot.uuid,
@@ -336,7 +369,7 @@ var iterate = function(bot, game) {
 			let x = Math.random() * game.playzoneSize - 10;
 			let y = bot.preferredYPosition * ((Math.random() - 0.5) * 20);
 			bot.destination = { x, y };
-			bot.debugChat("now mining around...")
+			bot.debugChat('now mining around...');
 		}
 
 		bot.mineStatusDuration++;
@@ -346,10 +379,10 @@ var iterate = function(bot, game) {
 
 	// harvesting wood
 	if (bot.status == 'Harvesting Wood') {
-	  bot.xVelocity = 0;
+		bot.xVelocity = 0;
 		bot.horizontalMovement = 0;
 		if (bot.blocksToBreak == {} || bot.mining == false) {
-		  bot.debugChat("done mining tree.");
+			bot.debugChat('done mining tree.');
 			bot.status = 'Idle';
 			bot.busy = false;
 		}

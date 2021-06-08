@@ -3,7 +3,7 @@ const blockUpdate = function(x, y, world) {
 
 	// block does not exist
 	if (block == undefined) {
-		return;
+		return world;
 	}
 
 	const placeBlock = function(x, y, block) {
@@ -57,6 +57,8 @@ const blockUpdate = function(x, y, world) {
 			placeBlock(x, y, 'Rooted Grass Left');
 		}
 	}
+	
+	return world;
 };
 
 const targetBlockUpdate = function(x, y, world) {
