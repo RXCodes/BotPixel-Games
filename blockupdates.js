@@ -62,10 +62,11 @@ const blockUpdate = function(x, y, world) {
 };
 
 const targetBlockUpdate = function(x, y, world) {
-	blockUpdate(x - 1, y, world);
-	blockUpdate(x + 1, y, world);
-	blockUpdate(x, y - 1, world);
-	blockUpdate(x, y + 1, world);
+	world = blockUpdate(x - 1, y, world);
+	world = blockUpdate(x + 1, y, world);
+	world = blockUpdate(x, y - 1, world);
+	world = blockUpdate(x, y + 1, world);
+	return world;
 };
 
 exports.update = targetBlockUpdate;

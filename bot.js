@@ -1,5 +1,6 @@
 world = require('./game');
 const blockDataScope = require('./blocks');
+const inventory = require('./inventory');
 blocksJSON = {};
 const reach = 5; // radius
 
@@ -40,7 +41,6 @@ var iterate = function(bot, game) {
 
 		// break block function
 		bot.break = function(x, y) {
-			world.destroyBlock(uuid, x, y, bot.uuid);
 			blockData = blocksJSON[game.world[x + ',' + y]];
 			if (blockData !== undefined) {
 				if (blockData.drops !== undefined) {
@@ -66,6 +66,7 @@ var iterate = function(bot, game) {
 					}
 				}
 			}
+			world.destroyBlock(uuid, x, y, bot.uuid);
 		};
 
 		// append to blocks to break
