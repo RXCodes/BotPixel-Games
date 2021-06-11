@@ -46,17 +46,15 @@ var iterate = function(bot, game) {
 				if (blockData.drops !== undefined) {
 					let give = inventory.give(bot.inventory, blockData.drops, 1);
 					bot.inventory = give.inventory;
-					if (give.success) {
-						world.emit(
+					if (give.success == true) {
+						world.emit(uuid, 
 							'Pick Up Item',
 							{
 								x,
 								y,
 								item: blockData.drops,
 								uuid: bot.uuid
-							},
-							'volatile'
-						);
+							});
 					}
 					if (give.leftOver > 0 && give.success) {
 					  world.summonItem(uuid, bot.x, bot.y, blockData.drops, give.leftOver);
@@ -176,6 +174,7 @@ var iterate = function(bot, game) {
 				}
 			}
 			bot.xVelocity = 0.75;
+			bot.horizontalMovement = 0.75;
 		} else {
 			if (bot.checkCollision(-1, 1)) {
 				bot.pushBreak(bot.getPos(-1, 1).x, bot.getPos(-1, 1).y);
@@ -184,6 +183,7 @@ var iterate = function(bot, game) {
 				}
 			}
 			bot.xVelocity = -0.75;
+			bot.horizontalMovement = -0.75;
 		}
 
 		// vertical movement

@@ -5,6 +5,7 @@ const blockDataScope = require('./blocks');
 const blockUpdate = require('./blockupdates');
 const inventory = require('./inventory');
 const maxItemLifetime = 30;
+const maxItemEntities = 100;
 blocksJSON = {};
 
 function generateUUID() {
@@ -148,7 +149,6 @@ const runGame = function(game) {
 	});
 	game.itemEntities = itemsArray;
 	pushEvent(game.uuid, 'Items Move', itemsArray, 'normal');
-	
 };
 
 // world interaction
@@ -209,7 +209,10 @@ const placeBlock = function(worldUUID, x, y, block, blockData) {
 // summon an item at a given position
 const summonItem = function(uuid, x, y, item, count) {
   let itemData = {
-    x, y, item, count, lifetime: 0
+    x: x + (Math.random() * 0.3), y, item, count, lifetime: 0, id: generateUUID()
+  }
+  if (games[uuid].itemEntities.length >= maxItemEntities) {
+    [uuid].itemEntities.shift();
   }
   games[uuid].itemEntities.push(itemData);
 }

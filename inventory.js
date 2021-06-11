@@ -1,5 +1,5 @@
-const maxSlotCount = 8;
-const maxStackCount = 99;
+const maxSlotCount = 1;
+const maxItemCount = 99;
 const blockDataScope = require('./blocks');
 blocksJSON = {};
 
@@ -15,8 +15,9 @@ const storeItem = function(inventory, item, count) {
 				count = 0;
 			} else {
 				if (count > 0) {
+				  let difference = maxItemCount - object.count;
 					object.count = maxItemCount;
-					count -= maxItemCount;
+					count -= difference;
 				}
 			}
 		}
