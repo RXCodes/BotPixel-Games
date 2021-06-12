@@ -139,7 +139,7 @@ var iterate = function(bot, game) {
 		// search for nearest features
 		let success = false;
 		const search = function() {
-			Object.keys(game.interests).forEach(function(key) {
+			Object.keys(game.interests).every(function(key) {
 				let x = key.split(',')[0];
 				let y = key.split(',')[1];
 				let deltaX = Math.abs(x - bot.x);
@@ -153,8 +153,9 @@ var iterate = function(bot, game) {
 					bot.currentDistance = 9999;
 					bot.distancePenalties = 0;
 					bot.debugChat('found destination.');
-					return;
+					return false;
 				}
+				return true;
 			});
 		};
 		search();
@@ -188,9 +189,10 @@ var iterate = function(bot, game) {
 
 		// vertical movement
 		if (bot.y - 0.5 < bot.destination.y) {
-			bot.jump();
 			if (bot.checkCollision(0, 2)) {
 				bot.pushBreak(bot.getPos(0, 2).x, bot.getPos(0, 2).y);
+			} else {
+			  bot.jump();
 			}
 		}
 		if (bot.y + 0.5 > bot.destination.y) {
@@ -228,6 +230,14 @@ var iterate = function(bot, game) {
 				bot.debugChat("can't reach there.");
 			}
 		}
+		
+		// check if the destination is still there
+		if (world[bot.destination.x + "," + bot.destination.y] == undefined) {
+		  bot.status = "Mining";
+		  bot.busy = false;
+			bot.debugChat("no longer a reason to go there.");
+		}
+		
 	}
 
 	// bot has arrived at destination while travelling
@@ -261,6 +271,17 @@ var iterate = function(bot, game) {
 					bot.busy = true;
 					return;
 				}
+				
+				// finding ores 
+				let ores = ['Gold Ore', 'Diamond Ore', 'Deep Gold Ore', 'Deep Glowing Amber', 'Glowing Amber', 'Deep Bixbite Ore', 'Bixbite Ore'];
+				let oreFound = false;
+				ores.forEach(function(ore) {
+				  if (ore == reason) {
+				    oreFound = true;
+				    bot.pushBreak(xDest, yDest);
+				    return;
+				  }
+				});
 
 				// no reason found
 				bot.status = 'Idle';
@@ -301,27 +322,20 @@ var iterate = function(bot, game) {
 			}
 
 			// get block breaking time
-			let blockBreakingTime = blocksJSON[block].breakDuration;
+			let blockBreakingTime = (blocksJSON[block] || {}).breakDuration;
 
 			// first time mining the block
 			if (bot.mineDuration == 0) {
 				world.emit(uuid, 'Mine', {
-					x,
-					y,
-					uuid: bot.uuid,
-					time: blockBreakingTime
-				});
-			} else if (bot.mineDuration % 3 == 0) {
-				world.emit(uuid, 'Mine Move', {
-					x,
-					y,
+					x: x,
+					y: y,
 					uuid: bot.uuid,
 					time: blockBreakingTime
 				});
 			}
 
 			// check if bot can reach the block
-			if (distance(bot.x, bot.y, x, y) > reach) {
+			if (distance(bot.x, bot.y, x, y) > reach && bot.mineDuration % 3 == 0) {
 				cancelMine();
 				return;
 			}

@@ -18,6 +18,8 @@ function generateUUID() {
 
 // start match
 startMatch = function(world, uuid) {
+  endMatch(games[uuid]);
+  
 	blocksJSON = blockDataScope.blocks();
 	games[uuid] = {
 		world: world.world,
@@ -56,6 +58,7 @@ startMatch = function(world, uuid) {
 		games[uuid].playerObjects.push(object);
 	};
 
+  // spawn players
 	for (i = 0; i < 10; i++) {
 		spawnPlayer((i - 5) * 10 + 5, 100);
 	}
@@ -130,6 +133,7 @@ const runGame = function(game) {
 	  // check if item expires past lifetime
 	  let index = 0;
 	  if (item.lifetime > maxItemLifetime) {
+	    pushEvent(game.uuid, 'Delete Item', game.itemEntities[index].id, 'normal');
 	    game.itemEntities[index] = "delete";
 	  } else {
 	    item.y -= 0.3;
@@ -212,7 +216,8 @@ const summonItem = function(uuid, x, y, item, count) {
     x: x + (Math.random() * 0.3), y, item, count, lifetime: 0, id: generateUUID()
   }
   if (games[uuid].itemEntities.length >= maxItemEntities) {
-    [uuid].itemEntities.shift();
+    pushEvent(game.uuid, 'Delete Item', game.itemEntities[0].id);
+    games[uuid].itemEntities.shift();
   }
   games[uuid].itemEntities.push(itemData);
 }
@@ -267,6 +272,7 @@ const sendChunkUpdates = function(game) {
 
 // end match
 var endMatch = function(uuid) {
+  pushEvent(uuid, 'Match End', {"type": "Room Expired."});
 	delete games[uuid];
 };
 

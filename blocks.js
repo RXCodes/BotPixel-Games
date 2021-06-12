@@ -1,6 +1,6 @@
 const passableBlocks = ['Oak Log', 'Birch Log'];
 const glowingBlocks = ['Glowing Amber', 'Deep Glowing Amber'];
-const usefulBlocks = ['Oak Log', 'Birch Log', 'Wood Crate', 'Iron Crate', 'Gold Crate'];
+const usefulBlocks = ['Oak Log', 'Birch Log', 'Wood Crate', 'Iron Crate', 'Gold Crate', 'Gold Ore', 'Diamond Ore', 'Deep Gold Ore', 'Deep Glowing Amber', 'Glowing Amber', 'Deep Bixbite Ore', 'Bixbite Ore'];
 const blockBreakingTime = {
 	Bedrock: 9999,
 	'Bedrock Body Fossil': 9999,
@@ -45,7 +45,8 @@ const blockBreakingTime = {
 	'Tilled Rooted Grass Right': 0.5,
 	'Wood Crate': 2,
 	'Iron Crate': 2.5,
-	'Gold Crate': 3
+	'Gold Crate': 3,
+	'Stone Bricks': 2.8
 };
 
 const blockBreakSoundFX = {
@@ -92,7 +93,8 @@ const blockBreakSoundFX = {
 	'Tilled Rooted Grass Right': 'Grass',
 	'Wood Crate': 'Wood',
 	'Iron Crate': 'Stone Fossil',
-	'Gold Crate': 'Amber'
+	'Gold Crate': 'Amber',
+	'Stone Bricks': 'Stone Fossil'
 };
 const lootTable = {
 	Basalt: 'Basalt',
@@ -129,7 +131,8 @@ const lootTable = {
 	'Tilled Rooted Dirt': 'Dirt',
 	'Tilled Rooted Grass': 'Dirt',
 	'Tilled Rooted Grass Left': 'Dirt',
-	'Tilled Rooted Grass Right': 'Dirt'
+	'Tilled Rooted Grass Right': 'Dirt',
+	'Stone Bricks': 'Stone Bricks'
 };
 
 var blocks = {};

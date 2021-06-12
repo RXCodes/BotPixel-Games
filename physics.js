@@ -68,11 +68,11 @@ var playerPhysics = function(object, collisions) {
 		}
 	}
 	if (prevY < object.y) {
-	  let checkX = Math.round(object.x);
-	  let checkY = Math.round(object.y - object.heightHalf - 0.5);
-	  if (collisions[checkX + "," + checkY] == undefined) {
-	    object.y--;
-	  }
+		let checkX = Math.round(object.x);
+		let checkY = Math.round(object.y - object.heightHalf - 0.5);
+		if (collisions[checkX + ',' + checkY] == undefined) {
+			object.y--;
+		}
 	}
 
 	return object;

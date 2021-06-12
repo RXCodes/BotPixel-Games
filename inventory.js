@@ -1,4 +1,4 @@
-const maxSlotCount = 1;
+const maxSlotCount = 7;
 const maxItemCount = 99;
 const blockDataScope = require('./blocks');
 blocksJSON = {};
