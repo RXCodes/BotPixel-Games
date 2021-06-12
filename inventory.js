@@ -127,7 +127,28 @@ const swapSlots = function(inventory, slotA, slotB) {
   return inventory;
 }
 
+const remove = function(inventory, slotID, count = 1) {
+  
+  // check if slot exists
+  if (inventory[slotID] == undefined) {
+    return {inventory, drop: false}
+  }
+  
+  // remove single item from stack from slot
+  inventory[slotID].count -= count;
+  
+  // remove slot if count reaches 0
+  if (inventory[slotID].count <= 0) {
+    inventory.splice(slotID, 1);
+    return {inventory, drop: true};
+  }
+  
+  return {inventory, drop: false};
+  
+}
+
 exports.give = storeItem;
-exports.count = checkForBlocks;
+exports.getBlocks = checkForBlocks;
 exports.clear = deleteSlot;
 exports.swap = swapSlots;
+exports.remove = remove;

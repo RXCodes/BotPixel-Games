@@ -36,7 +36,9 @@ var iterate = function(bot, game) {
 			if (bot.isOnGround == true) {
 				bot.jumpDelay = 15;
 				bot.yVelocity = 0.85;
+				return true;
 			}
+			return false;
 		};
 
 		// break block function
@@ -47,20 +49,24 @@ var iterate = function(bot, game) {
 					let give = inventory.give(bot.inventory, blockData.drops, 1);
 					bot.inventory = give.inventory;
 					if (give.success == true) {
-						world.emit(uuid, 
-							'Pick Up Item',
-							{
-								x,
-								y,
-								item: blockData.drops,
-								uuid: bot.uuid
-							});
+						world.emit(uuid, 'Pick Up Item', {
+							x,
+							y,
+							item: blockData.drops,
+							uuid: bot.uuid
+						});
 					}
 					if (give.leftOver > 0 && give.success) {
-					  world.summonItem(uuid, bot.x, bot.y, blockData.drops, give.leftOver);
+						world.summonItem(
+							uuid,
+							bot.x,
+							bot.y,
+							blockData.drops,
+							give.leftOver
+						);
 					}
 					if (!give.success) {
-					  world.summonItem(uuid, x, y, blockData.drops, give.leftOver);
+						world.summonItem(uuid, x, y, blockData.drops, give.leftOver);
 					}
 				}
 			}
@@ -93,11 +99,24 @@ var iterate = function(bot, game) {
 			return false;
 		};
 
-		// get block position relative to player
+		// get block position relative to bot
 		bot.getPos = function(x, y) {
 			let xPos = Math.round(bot.x) + Math.round(x);
 			let yPos = Math.round(bot.y - bot.heightHalf) + Math.round(y);
 			return { x: xPos, y: yPos };
+		};
+		
+		// place a block position relative to bot
+		bot.placeBlock = function(x, y) {
+			let xPos = Math.round(bot.x) + Math.round(x);
+			let yPos = Math.round(bot.y - bot.heightHalf) + Math.round(y);
+			let place = inventory.getBlocks(bot.inventory);
+			if (place.totalSolidBlocks > 0) {
+			  let useSlot = place.solidBlockSlots[0];
+			  world.placeBlock(uuid, x, y, bot.inventory[useSlot].name);
+			  inv = inventory.remove(bot.inventory, useSlot, 1);
+			  bot.inventory = inv.inventory;
+			}
 		};
 	}
 	let lifetime = (Date.now() - bot.start) / 1000;
@@ -166,39 +185,96 @@ var iterate = function(bot, game) {
 
 	// travel to destination
 	if (bot.status == 'Travelling') {
+		let xDelta = Math.abs(bot.destination.x - bot.x);
+
 		// horizontal movement
-		if (bot.x < bot.destination.x) {
-			if (bot.checkCollision(1, 1)) {
-				bot.pushBreak(bot.getPos(1, 1).x, bot.getPos(1, 1).y);
-				if (bot.checkCollision(0, 2) || bot.checkCollision(1, 2)) {
-					bot.pushBreak(bot.getPos(1, 0).x, bot.getPos(1, 0).y);
+		if (xDelta >= 3) {
+			if (bot.x < bot.destination.x) {
+				let jumped = false;
+				if (
+					bot.checkCollision(1, 0) &&
+					!bot.checkCollision(1, 1) &&
+					!bot.checkCollision(1, 2) &&
+					!bot.checkCollision(0, 2)
+				) {
+					bot.jump();
+					jumped = true;
 				}
-			}
-			bot.xVelocity = 0.75;
-			bot.horizontalMovement = 0.75;
-		} else {
-			if (bot.checkCollision(-1, 1)) {
-				bot.pushBreak(bot.getPos(-1, 1).x, bot.getPos(-1, 1).y);
-				if (bot.checkCollision(0, 2) || bot.checkCollision(-1, 2)) {
-					bot.pushBreak(bot.getPos(-1, 0).x, bot.getPos(-1, 0).y);
+				if (bot.checkCollision(1, 1) && !jumped) {
+					bot.pushBreak(bot.getPos(1, 1).x, bot.getPos(1, 1).y);
+					if (bot.checkCollision(0, 2) || bot.checkCollision(1, 2)) {
+						bot.pushBreak(bot.getPos(1, 0).x, bot.getPos(1, 0).y);
+					}
 				}
+				bot.xVelocity = 0.75;
+				bot.horizontalMovement = 0.75;
+			} else {
+				let jumped = false;
+				if (
+					bot.checkCollision(-1, 0) &&
+					!bot.checkCollision(-1, 1) &&
+					!bot.checkCollision(-1, 2) &&
+					!bot.checkCollision(0, 2)
+				) {
+					bot.jump();
+					jumped = true;
+				}
+				if (bot.checkCollision(-1, 1) && !jumped) {
+					bot.pushBreak(bot.getPos(-1, 1).x, bot.getPos(-1, 1).y);
+					if (bot.checkCollision(0, 2) || bot.checkCollision(-1, 2)) {
+						bot.pushBreak(bot.getPos(-1, 0).x, bot.getPos(-1, 0).y);
+					}
+				}
+				bot.xVelocity = -0.75;
+				bot.horizontalMovement = -0.75;
 			}
-			bot.xVelocity = -0.75;
-			bot.horizontalMovement = -0.75;
 		}
 
 		// vertical movement
-		if (bot.y - 0.5 < bot.destination.y) {
-			if (bot.checkCollision(0, 2)) {
-				bot.pushBreak(bot.getPos(0, 2).x, bot.getPos(0, 2).y);
-			} else {
-			  bot.jump();
+		if (xDelta < 3) {
+			if (bot.y - 0.5 < bot.destination.y) {
+				if (bot.checkCollision(0, 2)) {
+					bot.pushBreak(bot.getPos(0, 2).x, bot.getPos(0, 2).y);
+				} else {
+					bot.jump();
+					if (!bot.checkCollision(0, -1)) {
+					  bot.placeBlock(0, -1);
+					}
+				}
+			}
+			if (bot.y + 0.5 > bot.destination.y) {
+				if (bot.checkCollision(0, -1)) {
+					bot.pushBreak(bot.getPos(0, -1).x, bot.getPos(0, -1).y);
+				}
 			}
 		}
-		if (bot.y + 0.5 > bot.destination.y) {
-			if (bot.checkCollision(0, -1)) {
-				bot.pushBreak(bot.getPos(0, -1).x, bot.getPos(0, -1).y);
+
+		// check for holes
+		if (xDelta >= 3) {
+			let xOff;
+			if (bot.xVelocity < 0) {
+				xOff = -1;
+			} else {
+				xOff = 1;
 			}
+			
+			// check depth
+			let depth = 0;
+			for (i = 1; i <= 6; i++) {
+			  if (bot.checkCollision(xOff, -i)) {
+			    break;
+			  } else {
+			    depth++;
+			  }
+			}
+			
+			// attempt to jump over or cover hole
+			if (depth >= 6) {
+			  if (!bot.jump()) {
+			    bot.placeBlock(xOff, -1);
+			  }
+			}
+			
 		}
 
 		// sense of time while travelling
@@ -230,14 +306,6 @@ var iterate = function(bot, game) {
 				bot.debugChat("can't reach there.");
 			}
 		}
-		
-		// check if the destination is still there
-		if (world[bot.destination.x + "," + bot.destination.y] == undefined) {
-		  bot.status = "Mining";
-		  bot.busy = false;
-			bot.debugChat("no longer a reason to go there.");
-		}
-		
 	}
 
 	// bot has arrived at destination while travelling
@@ -271,17 +339,44 @@ var iterate = function(bot, game) {
 					bot.busy = true;
 					return;
 				}
-				
-				// finding ores 
-				let ores = ['Gold Ore', 'Diamond Ore', 'Deep Gold Ore', 'Deep Glowing Amber', 'Glowing Amber', 'Deep Bixbite Ore', 'Bixbite Ore'];
+
+				// finding ores
+				let ores = [
+					'Gold Ore',
+					'Diamond Ore',
+					'Deep Gold Ore',
+					'Deep Glowing Amber',
+					'Glowing Amber',
+					'Deep Bixbite Ore',
+					'Bixbite Ore'
+				];
 				let oreFound = false;
 				ores.forEach(function(ore) {
-				  if (ore == reason) {
-				    oreFound = true;
-				    bot.pushBreak(xDest, yDest);
-				    return;
-				  }
+					if (ore == reason) {
+						oreFound = true;
+						bot.pushBreak(xDest, yDest);
+						return;
+					}
 				});
+				if (oreFound) {
+					return;
+				}
+
+				// looting crates
+				let crates = ['Wood Crate', 'Iron Crate', 'Gold Crate'];
+				let crateFound = false;
+				crates.forEach(function(crate) {
+					if (crate == reason) {
+						crateFound = true;
+						bot.status = 'Looting Crate';
+						bot.crateX = xDest;
+						bot.crateY = yDest;
+						return;
+					}
+				});
+				if (crateFound) {
+					return;
+				}
 
 				// no reason found
 				bot.status = 'Idle';
@@ -376,6 +471,12 @@ var iterate = function(bot, game) {
 		// move up
 		if (bot.y - 1 < bot.preferredYPosition) {
 			bot.jump();
+			if (bot.checkCollision(0, 2)) {
+			  bot.pushBreak(bot.getPos(0, 2).x, bot.getPos(0, 2).y);
+			}
+			if (!bot.checkCollision(0, -1)) {
+			  bot.placeBlock(0, -1);
+			}
 		}
 
 		// move around
@@ -398,6 +499,17 @@ var iterate = function(bot, game) {
 		bot.horizontalMovement = 0;
 		if (bot.blocksToBreak == {} || bot.mining == false) {
 			bot.debugChat('done mining tree.');
+			bot.status = 'Idle';
+			bot.busy = false;
+		}
+	}
+	
+	// looting crate
+	if (bot.status == 'Looting Crate') {
+		bot.xVelocity = 0;
+		bot.horizontalMovement = 0;
+		if (false) {
+			bot.debugChat('done looting crate.');
 			bot.status = 'Idle';
 			bot.busy = false;
 		}

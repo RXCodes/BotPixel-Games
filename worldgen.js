@@ -435,8 +435,8 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	while (currentXPos < settings.worldSize) {
 	  let gap = Math.round(settings.woodCrateGapMin + (Math.random() * settings.woodCrateGapRange));
 	  currentXPos += gap;
-	  if (getBlock(currentXPos, grassLayer[grassLayerIndex]) !== undefined) {
-	    placeBlock(currentXPos, grassLayer[grassLayerIndex], "Wood Crate");
+	  if (getBlock(currentXPos, grassLayer[grassLayerIndex] + 1) == undefined) {
+	    placeBlock(currentXPos, grassLayer[grassLayerIndex] + 1, "Wood Crate");
 	  }
 	  grassLayerIndex++;
 	}
@@ -485,7 +485,7 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	  }
 	}
 
-	// return
+	// return data
 	return {
 		world,
 		blockData: worldBlockData,
