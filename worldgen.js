@@ -22,12 +22,13 @@ const defaultWorldSettings = {
 	minCaveLength: 10,
 	caveLengthRange: 45,
 	woodCrateGapMin: 5,
-	woodCrateGapRange: 6,
-	dungeonCount: 10,
-	dungeonSpawnLayer: 30
+	woodCrateGapRange: 5,
+	dungeonCount: 20,
+	dungeonSpawnLayer: 10
 };
 
 const blockDataScope = require("./blocks");
+const crates = require("./crateloot")
 var blocksJSON = {};
 
 const distance = function(x, y, x2, y2) {
@@ -51,6 +52,7 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	let chunks = {};
 	let lightBlocks = {};
 	let interests = {};
+	let crateLoot = {};
 
   // useful functions
   const getBlock = function(x, y) {
@@ -83,7 +85,7 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	}
 
 	// initialize block events
-	let chunkPosition = function(x, y, placeMode) {
+	var chunkPosition = function(x, y, placeMode) {
 		let chunkX = Math.round(x / chunkSize);
 		let chunkY = Math.round(y / chunkSize);
 		if (placeMode && chunks[chunkX + ',' + chunkY] == undefined) {
@@ -92,7 +94,7 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 		return chunkX + ',' + chunkY;
 	};
 
-	let placeBlock = function(x, y, id, blockData) {
+	var placeBlock = function(x, y, id, blockData = {}) {
 		let position = parseInt(x) + ',' + parseInt(y);
 		world[position] = id;
 		worldBlockData[position] = blockData;
@@ -114,7 +116,7 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	  }
 	};
 
-	let destroyBlock = function(x, y) {
+	var destroyBlock = function(x, y) {
 		let position = parseInt(x) + ',' + parseInt(y);
 		if (world[position] !== undefined && world[position] !== 'Bedrock') {
 		  delete lightBlocks[position];
@@ -127,6 +129,12 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 			blocksDestroyed++;
 		}
 	};
+	
+	var fillCrate = function(x, y, contents) {
+	  x = Math.round(x);
+		y = Math.round(y);
+		crateLoot[x + "," + y] = contents;
+	}
 
 	var clearRadius = function(x, y, diameter) {
 		let range = Math.floor(diameter / 2);
@@ -430,15 +438,23 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	});
 	
 	// scatter wood crates at surface
-	currentXPos = settings.worldSize * -1;
-	let grassLayerIndex = 0;
-	while (currentXPos < settings.worldSize) {
-	  let gap = Math.round(settings.woodCrateGapMin + (Math.random() * settings.woodCrateGapRange));
-	  currentXPos += gap;
-	  if (getBlock(currentXPos, grassLayer[grassLayerIndex] + 1) == undefined) {
-	    placeBlock(currentXPos, grassLayer[grassLayerIndex] + 1, "Wood Crate");
+	iterate = true;
+	let woodCrateIndex = 0;
+	const placeWoodCrate = function(x, y) {
+	  if (getBlock(x, y) == undefined) {
+	    placeBlock(x, y, "Wood Crate");
+	    loot = crates.generateLoot(Math.round(Math.random() * 4));
+	    fillCrate(x, y, loot);
 	  }
-	  grassLayerIndex++;
+	}
+	while (iterate == true) {
+		woodCrateIndex += parseInt(
+			Math.round(Math.random() * settings.woodCrateGapRange) + settings.woodCrateGapMin
+		);
+		placeWoodCrate(woodCrateIndex - settings.worldSize, grassLayer[woodCrateIndex] + 1);
+		if (woodCrateIndex + settings.woodCrateGapMin > settings.worldSize * 2) {
+			iterate = false;
+		}
 	}
 	
 	// scatter dungeons underground
@@ -464,8 +480,12 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	  clearArea(x - 2, y - 2, x + 2, y + 2);
 	  if (y > settings.deepLayerLevel) {
 	    placeBlock(x, y - 2, "Iron Crate");
+	    let loot = crates.generateLoot(3 + Math.round(Math.random() * 4));
+	    fillCrate(x, y - 2, loot);
 	  } else {
 	    placeBlock(x, y - 2, "Gold Crate");
+	    let loot = crates.generateLoot(7 + Math.round(Math.random() * 3));
+	    fillCrate(x, y - 2, loot);
 	  }
 	  return true;
 	  
@@ -495,7 +515,8 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 		blocksPlaced,
 		collisions,
 		chunks,
-		interests
+		interests,
+		crateLoot
 	};
 };
 

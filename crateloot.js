@@ -1,5 +1,11 @@
 const crateCapacity = 10;
 
+const lootTable = {
+  "Oak Planks": {"rarity": 1, "rarityRange": 2, "minCount": 4, "maxCount": 20, "includes": ["Sticks"]},
+  "Oak Log": {"rarity": 1.5, "rarityRange": 1.5, "minCount": 5, "maxCount": 9, "includes": ["Sticks"]},
+  "Sticks": {"rarity": 1, "rarityRange": 2, "minCount": 1, "maxCount": 6}
+}
+
 const generateLoot = function(rarity) {
   
   // rarity value range

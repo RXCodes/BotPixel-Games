@@ -1,6 +1,20 @@
 const passableBlocks = ['Oak Log', 'Birch Log'];
 const glowingBlocks = ['Glowing Amber', 'Deep Glowing Amber'];
 const usefulBlocks = ['Oak Log', 'Birch Log', 'Wood Crate', 'Iron Crate', 'Gold Crate', 'Gold Ore', 'Diamond Ore', 'Deep Gold Ore', 'Deep Glowing Amber', 'Glowing Amber', 'Deep Bixbite Ore', 'Bixbite Ore'];
+const interestPriority = {
+  'Oak Log': 4,
+  'Birch Log': 4,
+  'Wood Crate': 5,
+  'Iron Crate': 6,
+  'Gold Crate': 8,
+  'Diamond Ore': 7,
+  'Gold Ore': 7,
+  'Deep Gold Ore': 7,
+  'Deep Glowing Amber': 6,
+  'Glowing Amber': 6,
+  'Deep Bixbite Ore': 9,
+  'Bixbite Ore': 9
+}
 const blockBreakingTime = {
 	Bedrock: 9999,
 	'Bedrock Body Fossil': 9999,
@@ -156,10 +170,11 @@ const blockCheck = function() {
 		blocks[block].glowing = true;
 	});
 
-	// set useful blocks
-	usefulBlocks.forEach(function(block) {
+	// set useful blocks & priority
+	Object.keys(interestPriority).forEach(function(block) {
 		check(block);
 		blocks[block].useful = true;
+		blocks[block].priority = interestPriority[block];
 	});
 
 	// set breaking time property

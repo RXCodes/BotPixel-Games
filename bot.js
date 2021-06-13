@@ -70,7 +70,7 @@ var iterate = function(bot, game) {
 					}
 				}
 			}
-			world.destroyBlock(uuid, x, y, bot.uuid);
+			world.destroyBlock(uuid, x, y);
 		};
 
 		// append to blocks to break
@@ -105,17 +105,26 @@ var iterate = function(bot, game) {
 			let yPos = Math.round(bot.y - bot.heightHalf) + Math.round(y);
 			return { x: xPos, y: yPos };
 		};
-		
-		// place a block position relative to bot
+
+		// cancel mining all blocks
+		bot.stopMining = function() {
+			world.emit(uuid, 'Cancel Mine', {
+				uuid: bot.uuid
+			});
+			bot.blocksToBreak = {};
+			bot.mining = false;
+		};
+
+		// attempt to place a block position relative to bot
 		bot.placeBlock = function(x, y) {
 			let xPos = Math.round(bot.x) + Math.round(x);
 			let yPos = Math.round(bot.y - bot.heightHalf) + Math.round(y);
 			let place = inventory.getBlocks(bot.inventory);
 			if (place.totalSolidBlocks > 0) {
-			  let useSlot = place.solidBlockSlots[0];
-			  world.placeBlock(uuid, x, y, bot.inventory[useSlot].name);
-			  inv = inventory.remove(bot.inventory, useSlot, 1);
-			  bot.inventory = inv.inventory;
+				let useSlot = place.solidBlockSlots[0];
+				world.placeBlock(uuid, x, y, bot.inventory[useSlot].name);
+				inv = inventory.remove(bot.inventory, useSlot, 1);
+				bot.inventory = inv.inventory;
 			}
 		};
 	}
@@ -153,29 +162,60 @@ var iterate = function(bot, game) {
 		}
 	}
 
-	// constantly find resources
+	// constantly locate resources
 	if (Math.random() < 0.1 && bot.busy !== true) {
 		// search for nearest features
 		let success = false;
+		let features = [];
 		const search = function() {
-			Object.keys(game.interests).every(function(key) {
+			Object.keys(game.interests).forEach(function(key) {
 				let x = key.split(',')[0];
 				let y = key.split(',')[1];
 				let deltaX = Math.abs(x - bot.x);
 				let deltaY = Math.abs(y - bot.y);
 				if (deltaX <= 10 && deltaY <= 7) {
-					bot.status = 'Travelling';
-					bot.destination = { x, y };
-					bot.travelTime = 0;
 					success = true;
-					bot.busy = true;
-					bot.currentDistance = 9999;
-					bot.distancePenalties = 0;
-					bot.debugChat('found destination.');
-					return false;
+					features.push({
+						x,
+						y,
+						interest: game.world[x + ',' + y]
+					});
 				}
-				return true;
 			});
+			if (success) {
+				bot.busy = true;
+				bot.currentDistance = 9999;
+				bot.distancePenalties = 0;
+				bot.debugChat('found destination.');
+				bot.status = 'Travelling';
+				bot.travelTime = 0;
+
+				// find best possible destination
+				let priorities = [];
+				let prioritiesMap = {};
+				features.forEach(function(object) {
+					let score = parseInt((blocksJSON[object.interest] || {}).priority);
+					priorities.push(score);
+					prioritiesMap[score] = prioritiesMap[score] || [];
+					prioritiesMap[score].push(object);
+				});
+				priorities.sort(function(a, b) {
+					return b - a;
+				});
+				let bestDestinations = prioritiesMap[priorities[0]];
+				let dist = 99999;
+				let x = bot.x;
+				let y = bot.y;
+				bestDestinations.forEach(function(object) {
+				  let newDist = Math.abs(bot.x - object.x) + Math.abs(bot.y - object.y)
+				  if (newDist < dist) {
+				    dist = newDist;
+				    x = object.x;
+				    y = object.y;
+				  }
+				});
+				bot.destination = { x, y };
+			}
 		};
 		search();
 		if (!success) {
@@ -189,8 +229,8 @@ var iterate = function(bot, game) {
 
 		// horizontal movement
 		if (xDelta >= 3) {
+			let jumped = false;
 			if (bot.x < bot.destination.x) {
-				let jumped = false;
 				if (
 					bot.checkCollision(1, 0) &&
 					!bot.checkCollision(1, 1) &&
@@ -209,7 +249,6 @@ var iterate = function(bot, game) {
 				bot.xVelocity = 0.75;
 				bot.horizontalMovement = 0.75;
 			} else {
-				let jumped = false;
 				if (
 					bot.checkCollision(-1, 0) &&
 					!bot.checkCollision(-1, 1) &&
@@ -228,6 +267,11 @@ var iterate = function(bot, game) {
 				bot.xVelocity = -0.75;
 				bot.horizontalMovement = -0.75;
 			}
+
+			// stack blocks under player if needed
+			if (!bot.checkCollision(0, -1) && !bot.checkCollision(0, 2)) {
+				bot.placeBlock(0, -1);
+			}
 		}
 
 		// vertical movement
@@ -238,7 +282,7 @@ var iterate = function(bot, game) {
 				} else {
 					bot.jump();
 					if (!bot.checkCollision(0, -1)) {
-					  bot.placeBlock(0, -1);
+						bot.placeBlock(0, -1);
 					}
 				}
 			}
@@ -257,24 +301,23 @@ var iterate = function(bot, game) {
 			} else {
 				xOff = 1;
 			}
-			
+
 			// check depth
 			let depth = 0;
 			for (i = 1; i <= 6; i++) {
-			  if (bot.checkCollision(xOff, -i)) {
-			    break;
-			  } else {
-			    depth++;
-			  }
+				if (bot.checkCollision(xOff, -i)) {
+					break;
+				} else {
+					depth++;
+				}
 			}
-			
+
 			// attempt to jump over or cover hole
 			if (depth >= 6) {
-			  if (!bot.jump()) {
-			    bot.placeBlock(xOff, -1);
-			  }
+				if (!bot.jump()) {
+					bot.placeBlock(xOff, -1);
+				}
 			}
-			
 		}
 
 		// sense of time while travelling
@@ -320,15 +363,27 @@ var iterate = function(bot, game) {
 
 			// react to reason
 			let takeAction = function() {
+				// make this spot no longer valuable to other bots
+				delete game.interests[xDest + ',' + yDest];
+
 				// finding wood
-				if (reason == 'Oak Log' || reason == 'Birch Log') {
+				let woodBlocks = ['Oak Log', 'Birch Log'];
+				const checkForWood = function(block) {
+					let bool = false;
+					woodBlocks.forEach(function(wood) {
+						if (block == wood) {
+							bool = true;
+						}
+					});
+					return bool;
+				};
+
+				if (checkForWood(reason)) {
 					bot.status = 'Harvesting Wood';
 					bot.pushBreak(xDest, yDest);
 					let logBreak = function(x, y) {
-						if (
-							game.world[x + ',' + y] == 'Oak Log' ||
-							game.world[x + ',' + y] == 'Birch Log'
-						) {
+						if (checkForWood(game.world[x + ',' + y])) {
+							delete game.interests[x + ',' + y];
 							bot.pushBreak(x, y);
 						}
 					};
@@ -367,6 +422,8 @@ var iterate = function(bot, game) {
 				let crateFound = false;
 				crates.forEach(function(crate) {
 					if (crate == reason) {
+					  bot.stopMining();
+					  bot.debugChat('looting crate.');
 						crateFound = true;
 						bot.status = 'Looting Crate';
 						bot.crateX = xDest;
@@ -390,27 +447,33 @@ var iterate = function(bot, game) {
 	if (bot.mining) {
 		const mine = function() {
 			// get position
-			let currentBlock = Object.keys(bot.blocksToBreak).sort()[0];
-			let position = bot.blocksToBreak[currentBlock];
+			if (bot.mineDuration == 0) {
+				let currentBlock = Object.keys(bot.blocksToBreak).sort()[0];
+				let position = bot.blocksToBreak[currentBlock];
 
-			if (position == undefined) {
-				bot.mining = false;
-				bot.blocksToBreak = {};
-				return;
+				if (position == undefined) {
+					bot.mining = false;
+					bot.blocksToBreak = {};
+					return;
+				}
+
+				bot.targetX = position[0];
+				bot.targetY = position[1];
 			}
-
-			let x = position[0];
-			let y = position[1];
 
 			// cancel mining if necessary
 			const cancelMine = function() {
-				world.emit(uuid, 'Cancel Mine', { x, y, uuid: bot.uuid });
+				world.emit(uuid, 'Cancel Mine', {
+					x: bot.targetX,
+					y: bot.targetY,
+					uuid: bot.uuid
+				});
 				bot.mineDuration = 0;
-				delete bot.blocksToBreak[currentBlock];
+				delete bot.blocksToBreak[bot.targetX + ',' + bot.targetY];
 			};
 
 			// check if block exists
-			let block = game.world[x + ',' + y];
+			let block = game.world[bot.targetX + ',' + bot.targetY];
 			if (block == undefined) {
 				cancelMine();
 				return;
@@ -422,15 +485,18 @@ var iterate = function(bot, game) {
 			// first time mining the block
 			if (bot.mineDuration == 0) {
 				world.emit(uuid, 'Mine', {
-					x: x,
-					y: y,
+					x: bot.targetX,
+					y: bot.targetY,
 					uuid: bot.uuid,
 					time: blockBreakingTime
 				});
 			}
 
 			// check if bot can reach the block
-			if (distance(bot.x, bot.y, x, y) > reach && bot.mineDuration % 3 == 0) {
+			if (
+				distance(bot.x, bot.y, bot.targetX, bot.targetY) > reach &&
+				bot.mineDuration % 3 == 0
+			) {
 				cancelMine();
 				return;
 			}
@@ -438,8 +504,8 @@ var iterate = function(bot, game) {
 			// check if enough time elapsed to break block
 			if (bot.mineDuration >= blockBreakingTime) {
 				bot.mineDuration = 0;
-				bot.break(x, y);
-				delete bot.blocksToBreak[currentBlock];
+				bot.break(bot.targetX, bot.targetY);
+				delete bot.blocksToBreak[bot.targetX + ',' + bot.targetY];
 				return;
 			}
 
@@ -472,10 +538,10 @@ var iterate = function(bot, game) {
 		if (bot.y - 1 < bot.preferredYPosition) {
 			bot.jump();
 			if (bot.checkCollision(0, 2)) {
-			  bot.pushBreak(bot.getPos(0, 2).x, bot.getPos(0, 2).y);
+				bot.pushBreak(bot.getPos(0, 2).x, bot.getPos(0, 2).y);
 			}
 			if (!bot.checkCollision(0, -1)) {
-			  bot.placeBlock(0, -1);
+				bot.placeBlock(0, -1);
 			}
 		}
 
@@ -503,9 +569,10 @@ var iterate = function(bot, game) {
 			bot.busy = false;
 		}
 	}
-	
+
 	// looting crate
 	if (bot.status == 'Looting Crate') {
+		bot.stopMining();
 		bot.xVelocity = 0;
 		bot.horizontalMovement = 0;
 		if (false) {

@@ -32,12 +32,13 @@ startMatch = function(world, uuid) {
 		borderSize: 100,
 		playzoneSize: 105,
 		updateChunks: {},
-		itemEntities: []
+		itemEntities: [],
+		crateContents: {}
 	};
 
 	let spawnPlayer = function(x, y) {
 		defaultWidth = 0.75;
-		defaultHeight = 1.9;
+		defaultHeight = 1.85;
 		let object = {
 			x,
 			y,
@@ -194,7 +195,7 @@ const destroyBlock = function(worldUUID, x, y, uuid = "bot") {
 };
 
 // place a block at a given position
-const placeBlock = function(worldUUID, x, y, block, blockData) {
+const placeBlock = function(worldUUID, x, y, block, blockData = {}) {
 	let position = x + ',' + y;
 	pushEvent(worldUUID, 'Place Block', {
 		x,
@@ -212,8 +213,13 @@ const placeBlock = function(worldUUID, x, y, block, blockData) {
 
 // summon an item at a given position
 const summonItem = function(uuid, x, y, item, count) {
+  type = "block/";
+  if (blocksJSON[item] == undefined) {
+    type = "item/";
+  }
   let itemData = {
-    x: x + (Math.random() * 0.3), y, item, count, lifetime: 0, id: generateUUID()
+    x: x + (Math.random() * 0.3), y, item, count, lifetime: 0, id: generateUUID(),
+    type
   }
   if (games[uuid].itemEntities.length >= maxItemEntities) {
     pushEvent(game.uuid, 'Delete Item', game.itemEntities[0].id);
