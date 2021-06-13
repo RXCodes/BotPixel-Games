@@ -1,4 +1,21 @@
 const crateCapacity = 10;
+function shuffle(array) {
+  var currentIndex = array.length,  randomIndex;
+
+  // While there remain elements to shuffle...
+  while (0 !== currentIndex) {
+
+    // Pick a remaining element...
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex--;
+
+    // And swap it with the current element.
+    [array[currentIndex], array[randomIndex]] = [
+      array[randomIndex], array[currentIndex]];
+  }
+
+  return array;
+}
 
 const lootTable = {
   "Oak Planks": {"rarity": 1, "rarityRange": 2, "minCount": 4, "maxCount": 20, "includes": ["Sticks"]},
@@ -22,7 +39,7 @@ const generateLoot = function(rarity) {
   let count = 3 + Math.round(rarity / 3) + Math.round(Math.random() * 2);
   
   // pick indexes to be filled with items
-  indexes.shuffle();
+  indexes = shuffle(indexes);
   let targetIndexes = [];
   for (i = 0; i < count; i++) {
     targetIndexes.push(indexes[i]);

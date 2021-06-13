@@ -276,6 +276,8 @@ var iterate = function(bot, game) {
 
 		// vertical movement
 		if (xDelta < 3) {
+			bot.xVelocity = 0;
+			bot.horizontalMovement = 0;
 			if (bot.y - 0.5 < bot.destination.y) {
 				if (bot.checkCollision(0, 2)) {
 					bot.pushBreak(bot.getPos(0, 2).x, bot.getPos(0, 2).y);
@@ -428,6 +430,8 @@ var iterate = function(bot, game) {
 						bot.status = 'Looting Crate';
 						bot.crateX = xDest;
 						bot.crateY = yDest;
+						bot.lootTime = Math.round(Math.random() * 50) + 20;
+						bot.busy = true;
 						return;
 					}
 				});
@@ -575,7 +579,8 @@ var iterate = function(bot, game) {
 		bot.stopMining();
 		bot.xVelocity = 0;
 		bot.horizontalMovement = 0;
-		if (false) {
+		bot.lootTime--;
+		if (game.crateContents[bot.crateX + "," + bot.crateY] == {} || bot.lootTime <= 0) {
 			bot.debugChat('done looting crate.');
 			bot.status = 'Idle';
 			bot.busy = false;

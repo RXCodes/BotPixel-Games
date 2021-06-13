@@ -33,7 +33,7 @@ startMatch = function(world, uuid) {
 		playzoneSize: 105,
 		updateChunks: {},
 		itemEntities: [],
-		crateContents: {}
+		crateContents: world.crateLoot
 	};
 
 	let spawnPlayer = function(x, y) {
