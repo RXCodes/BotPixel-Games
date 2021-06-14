@@ -131,8 +131,6 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	};
 	
 	var fillCrate = function(x, y, contents) {
-	  x = Math.round(x);
-		y = Math.round(y);
 		crateLoot[x + "," + y] = contents;
 	}
 

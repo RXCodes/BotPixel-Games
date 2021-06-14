@@ -215,6 +215,7 @@ var iterate = function(bot, game) {
 				  }
 				});
 				bot.destination = { x, y };
+				delete game.interests[x + ',' + y];
 			}
 		};
 		search();
@@ -385,7 +386,6 @@ var iterate = function(bot, game) {
 					bot.pushBreak(xDest, yDest);
 					let logBreak = function(x, y) {
 						if (checkForWood(game.world[x + ',' + y])) {
-							delete game.interests[x + ',' + y];
 							bot.pushBreak(x, y);
 						}
 					};

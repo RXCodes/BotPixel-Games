@@ -213,9 +213,9 @@ const placeBlock = function(worldUUID, x, y, block, blockData = {}) {
 
 // summon an item at a given position
 const summonItem = function(uuid, x, y, item, count) {
-  type = "block/";
+  type = "Block/";
   if (blocksJSON[item] == undefined) {
-    type = "item/";
+    type = "Item/";
   }
   let itemData = {
     x: x + (Math.random() * 0.3), y, item, count, lifetime: 0, id: generateUUID(),
