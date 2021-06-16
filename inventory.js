@@ -84,7 +84,7 @@ const checkForBlocks = function(inventory) {
       totalBlocks++;
       
       // check if the block is solid
-      if (blocksJSON[object.name].passable !== undefined) {
+      if (blocksJSON[object.name].passable == undefined) {
         totalSolidBlocks++;
         solidBlockSlots.push(index);
       }

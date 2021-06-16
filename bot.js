@@ -3,6 +3,7 @@ const blockDataScope = require('./blocks');
 const inventory = require('./inventory');
 blocksJSON = {};
 const reach = 5; // radius
+const woodBlocks = ['Oak Log', 'Birch Log'];
 
 const distance = function(x, y, x2, y2) {
 	xDelta = (x2 - x) * (x2 - x);
@@ -120,15 +121,17 @@ var iterate = function(bot, game) {
 			let xPos = Math.round(bot.x) + Math.round(x);
 			let yPos = Math.round(bot.y - bot.heightHalf) + Math.round(y);
 			let place = inventory.getBlocks(bot.inventory);
-			if (place.totalSolidBlocks > 0) {
+			if (place.totalSolidBlocks > 0 && !bot.mining) {
 				let useSlot = place.solidBlockSlots[0];
-				world.placeBlock(uuid, x, y, bot.inventory[useSlot].name);
+				let newX = bot.getPos(x, y).x;
+				let newY = bot.getPos(x, y).y;
+				world.placeBlock(uuid, newX, newY, bot.inventory[useSlot].name);
 				inv = inventory.remove(bot.inventory, useSlot, 1);
 				bot.inventory = inv.inventory;
 			}
 		};
 	}
-	let lifetime = (Date.now() - bot.start) / 1000;
+	let lifetime = Math.round((Date.now() - bot.start) / 1000);
 
 	// idle activity
 	if (bot.status == 'Idle' && bot.horizontalMovement == 0) {
@@ -207,12 +210,12 @@ var iterate = function(bot, game) {
 				let x = bot.x;
 				let y = bot.y;
 				bestDestinations.forEach(function(object) {
-				  let newDist = Math.abs(bot.x - object.x) + Math.abs(bot.y - object.y)
-				  if (newDist < dist) {
-				    dist = newDist;
-				    x = object.x;
-				    y = object.y;
-				  }
+					let newDist = Math.abs(bot.x - object.x) + Math.abs(bot.y - object.y);
+					if (newDist < dist) {
+						dist = newDist;
+						x = object.x;
+						y = object.y;
+					}
 				});
 				bot.destination = { x, y };
 				delete game.interests[x + ',' + y];
@@ -370,7 +373,6 @@ var iterate = function(bot, game) {
 				delete game.interests[xDest + ',' + yDest];
 
 				// finding wood
-				let woodBlocks = ['Oak Log', 'Birch Log'];
 				const checkForWood = function(block) {
 					let bool = false;
 					woodBlocks.forEach(function(wood) {
@@ -424,8 +426,8 @@ var iterate = function(bot, game) {
 				let crateFound = false;
 				crates.forEach(function(crate) {
 					if (crate == reason) {
-					  bot.stopMining();
-					  bot.debugChat('looting crate.');
+						bot.stopMining();
+						bot.debugChat('looting crate.');
 						crateFound = true;
 						bot.status = 'Looting Crate';
 						bot.crateX = xDest;
@@ -580,11 +582,51 @@ var iterate = function(bot, game) {
 		bot.xVelocity = 0;
 		bot.horizontalMovement = 0;
 		bot.lootTime--;
-		if (game.crateContents[bot.crateX + "," + bot.crateY] == {} || bot.lootTime <= 0) {
+		if (
+			game.crateContents[bot.crateX + ',' + bot.crateY] == {} ||
+			bot.lootTime <= 0
+		) {
 			bot.debugChat('done looting crate.');
 			bot.status = 'Idle';
 			bot.busy = false;
 		}
+	}
+
+	// automatically craft logs into planks
+	if (lifetime % 5 == 0) {
+	  let index = 0
+		bot.inventory.forEach(function(item) {
+			let bool = false;
+			woodBlocks.forEach(function(wood) {
+				if (item.name == wood) {
+					bool = true;
+					let woodType = "Oak Planks";
+					if (wood == "Birch Log") {
+					  woodType = "Birch Planks";
+					}
+					let give = inventory.give(bot.inventory, woodType, item.count * 4);
+					bot.inventory = give.inventory;
+					if (give.leftOver > 0) {
+						world.summonItem(
+							uuid,
+							bot.x,
+							bot.y,
+							blockData.drops,
+							give.leftOver
+						);
+					}
+					bot.inventory[index] = "Delete";
+				}
+			});
+			index++;
+		});
+		let newInventory = [];
+		bot.inventory.forEach(function(object) {
+		  if (object !== "Delete") {
+		    newInventory.push(object);
+		  }
+		});
+		bot.inventory = newInventory;
 	}
 };
 

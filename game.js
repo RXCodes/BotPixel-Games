@@ -27,7 +27,7 @@ startMatch = function(world, uuid) {
 		interests: world.interests,
 		playerObjects: [],
 		startTime: Date.now(),
-		matchBegins: Date.now() + 20.9 * 1000,
+		matchBegins: Date.now() + 25.9 * 1000,
 		uuid,
 		borderSize: 100,
 		playzoneSize: 105,
