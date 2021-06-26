@@ -51,6 +51,11 @@ const gamedirectory = path.join(__dirname, 'html');
 app.use(express.static(gamedirectory));
 httpserver.listen(3000);
 
+// reference a socket by id
+const getSocket = function(id) {
+  return io.sockets.connected[id] || {};
+};
+
 // socket.io events
 io.on('connection', function(socket) {
 	// initialize variables
@@ -116,18 +121,52 @@ io.on('connection', function(socket) {
 		}
 	});
 
-	socket.on('start game', function(packet, callback) {
-		let world = worldGen.generateWorld();
-		let roomUUID = socket.id + '-game';
-		if (socket.room) {
-			socket.leave(socket.room);
+	// player actions
+	socket.on('move', function(packet, callback) {
+		if (isDictionary(packet) && socket.ingame) {
+			let parsedPacket = JSON.parse(packet);
+			if (
+				checkPacket(parsedPacket, ['xPos', 'yPos', 'xVelocity', 'yVelocity'])
+			) {
+				gameHandler.move(socket.room, socket.uuid, parsedPacket);
+			}
 		}
-		gameHandler.startMatch(world, roomUUID);
-		socket.join(roomUUID);
-		socket.room = roomUUID;
-		io.to(socket.id).emit('open world', world.world, world.chunks);
+	});
+	socket.on('destroy block', function(packet, callback) {
+		if (isDictionary(packet) && socket.ingame) {
+			let parsedPacket = JSON.parse(packet);
+			if (
+				checkPacket(parsedPacket, ['x', 'y'])
+			) {
+				gameHandler.destroyBlockEvent(parsedPacket.x, parsedPacket.y, socket.uuid, socket.room);
+			}
+			let inv = gameHandler.updateInventory(socket.room, socket.uuid);
+			io.to(socket.id).emit('update inventory', inv);
+		}
+	});
+	socket.on('start mine', function(packet, callback) {
+		if (isDictionary(packet) && socket.ingame) {
+			let parsedPacket = JSON.parse(packet);
+			if (
+				checkPacket(parsedPacket, ['x', 'y'])
+			) {
+			  parsedPacket.uuid = socket.uuid;
+				io.to(socket.room).emit("Mine", parsedPacket);
+			}
+		}
+	});
+	socket.on('cancel mine', function(packet, callback) {
+		if (socket.ingame) {
+			io.to(socket.room).emit("Cancel Mine", {uuid: socket.uuid});
+		}
 	});
 
+  // get timestamp
+	socket.on('get timestamp', function(packet, callback) {
+		callback('Success', Date.now() / 1000);
+	});
+
+  // fetch block data
 	socket.on('get block data', function(packet, callback) {
 		callback(blockData.get());
 	});
@@ -140,13 +179,26 @@ io.on('connection', function(socket) {
 			quene[packet['mode']] = quene[packet['mode']] || {};
 			if (quene[packet['mode']] == {}) {
 				queneCurrent[packet['mode']] = generateUUID();
+				
+				// random chance to have bots
+				if (Math.random() < 0.4) {
+					let clones = 2 + Math.round(Math.random() * 5);
+					for (i = 0; i < clones; i++) {
+						quene[packet['mode']][generateUUID()] = {
+							type: 'Bot',
+							uuid: generateUUID()
+						};
+					}
+				}
+				
 			}
 			socket.join(queneCurrent[packet['mode']]);
 			socket.room = queneCurrent[packet['mode']];
 			socket.matchmakingMode = packet['mode'];
 			quene[packet['mode']][socket.id] = {
 				uuid: socket.uuid,
-				type: 'Player'
+				type: 'Player',
+				id: socket.id
 			};
 			callback({
 				players: Object.keys(quene[packet['mode']]).length,
@@ -158,7 +210,7 @@ io.on('connection', function(socket) {
 				Object.keys(quene[packet['mode']]).length
 			);
 		};
-		if (isDictionary(packet) && socket.matchmaking == false) {
+		if (isDictionary(packet) && !socket.matchmaking && !socket.ingame) {
 			let parsedPacket = JSON.parse(packet);
 			if (checkPacket(parsedPacket, ['mode', 'map'])) {
 				matchmake();
@@ -171,6 +223,7 @@ io.on('connection', function(socket) {
 		if (socket.matchmaking) {
 			socket.leave(socket.room);
 			socket.matchmaking = false;
+			socket.ingame = false;
 			delete (quene[socket.matchmakingMode] || {})[socket.id];
 			io.to(socket.room).emit(
 				'update count',
@@ -204,7 +257,7 @@ const matchmake = function() {
 			Object.keys(quene[key] || {}).length >= 1 &&
 			Object.keys(quene[key] || {}).length < 10
 		) {
-			if (Math.random() < 0.25) {
+			if (Math.random() < 0.15) {
 				quene[key][generateUUID()] = {
 					type: 'Bot',
 					uuid: generateUUID()
@@ -220,19 +273,33 @@ const matchmake = function() {
 		if (Object.keys(quene[key] || {}).length >= 10) {
 			let roomUUID = queneCurrent[key];
 			let start = false;
+			let ids = [];
 			Object.keys(quene[key]).forEach(function(player) {
 				if (quene[key][player].type == 'Player') {
+					io.to(player).ingame = true;
+					io.to(player).matchmaking = false;
+					io.to(player).emit('set id', player);
 					start = true;
+					ids.push({ type: 'Player', id: player });
+				} else {
+					ids.push({ type: 'Bot', id: player });
 				}
 			});
 			if (start) {
 				setTimeout(function() {
 					let world = worldGen.generateWorld();
-					gameHandler.startMatch(world, roomUUID);
+					let matchmakeData = gameHandler.startMatch(world, roomUUID, ids);
+					Object.keys(matchmakeData.positions).forEach(function(id) {
+						io.to(id).emit('start position', matchmakeData.positions[id]);
+						getSocket(id).ingame = true;
+						getSocket(id).matchmaking = false;
+					});
 					io.to(roomUUID).emit('open world', world.world, world.chunks);
-					io.to(roomUUID).emit('game data', world);
+					io.to(roomUUID).emit('loot', world.crateLoot);
 				}, 1000);
 			}
+			
+			// destroy matchmaking room if full
 			deleteQuenes.push(key);
 		}
 	});
@@ -271,3 +338,6 @@ setInterval(function() {
 	// clear events after sending them
 	gameHandler.clearEvents();
 }, 100);
+
+// ping all connected clients
+io.emit('timestamp', Date.now() / 1000);

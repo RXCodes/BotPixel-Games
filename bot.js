@@ -53,6 +53,7 @@ var iterate = function(bot, game) {
 						world.emit(uuid, 'Pick Up Item', {
 							x,
 							y,
+							type: "Blocks/",
 							item: blockData.drops,
 							uuid: bot.uuid
 						});

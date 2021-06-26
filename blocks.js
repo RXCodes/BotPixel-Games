@@ -1,4 +1,4 @@
-const passableBlocks = ['Oak Log', 'Birch Log'];
+const passableBlocks = ['Oak Log', 'Birch Log', "Wood Crate", "Iron Crate", "Gold Crate"];
 const glowingBlocks = ['Glowing Amber', 'Deep Glowing Amber'];
 const usefulBlocks = ['Oak Log', 'Birch Log', 'Wood Crate', 'Iron Crate', 'Gold Crate', 'Gold Ore', 'Diamond Ore', 'Deep Gold Ore', 'Deep Glowing Amber', 'Glowing Amber', 'Deep Bixbite Ore', 'Bixbite Ore'];
 const interestPriority = {
@@ -150,6 +150,7 @@ const lootTable = {
 };
 
 var blocks = {};
+var hyperPadPassable = {};
 
 const blockCheck = function() {
 	const check = function(block) {
@@ -162,6 +163,7 @@ const blockCheck = function() {
 	passableBlocks.forEach(function(block) {
 		check(block);
 		blocks[block].passable = true;
+		hyperPadPassable[block] = 1;
 	});
 
 	// set glowing property
@@ -199,13 +201,14 @@ const blockCheck = function() {
 };
 
 const getBlockData = function() {
-	let data = {
-		breakingSoundFX: blockBreakSoundFX,
-		blockBreakingTime,
-		passableBlocks,
-		glowingBlocks,
-		lootTable
-	};
+  blockCheck();
+	let data = JSON.stringify({
+		breakingSoundFX: JSON.stringify(blockBreakSoundFX),
+		blockBreakingTime: JSON.stringify(blockBreakingTime),
+		passableBlocks: JSON.stringify(hyperPadPassable),
+		glowingBlocks: JSON.stringify(glowingBlocks),
+		lootTable: JSON.stringify(lootTable)
+	});
 	return data;
 };
 

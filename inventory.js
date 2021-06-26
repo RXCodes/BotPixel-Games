@@ -3,6 +3,18 @@ const maxItemCount = 99;
 const blockDataScope = require('./blocks');
 blocksJSON = {};
 
+// serialize item data for players
+const serialize = function(slotData) {
+  
+    // check if item is a block
+    if (blocksJSON[slotData.name] !== undefined) {
+      slotData.type = "Block/";
+    } else {
+      slotData.type = "Item/";
+    }
+  
+}
+
 // store new item(s) to a given inventory
 const storeItem = function(inventory, item, count) {
   
@@ -49,6 +61,7 @@ const storeItem = function(inventory, item, count) {
 	      count -= maxItemCount;
 	    }
 	  }
+	  serialize(slotData);
 	  inventory.push(slotData);
 	}
 	
