@@ -4,7 +4,9 @@ const inventory = require('./inventory');
 blocksJSON = {};
 const reach = 5; // radius
 const woodBlocks = ['Oak Log', 'Birch Log'];
-
+const getBlock = function(block) {
+	return blocksJSON[block] || {};
+};
 const distance = function(x, y, x2, y2) {
 	xDelta = (x2 - x) * (x2 - x);
 	yDelta = (y2 - y) * (y2 - y);
@@ -50,10 +52,14 @@ var iterate = function(bot, game) {
 					let give = inventory.give(bot.inventory, blockData.drops, 1);
 					bot.inventory = give.inventory;
 					if (give.success == true) {
+						let type = 'Items/';
+						if (getBlock(blockData.drops).breakDuration) {
+							type = 'Blocks/';
+						}
 						world.emit(uuid, 'Pick Up Item', {
 							x,
 							y,
-							type: "Blocks/",
+							type,
 							item: blockData.drops,
 							uuid: bot.uuid
 						});
@@ -595,15 +601,15 @@ var iterate = function(bot, game) {
 
 	// automatically craft logs into planks
 	if (lifetime % 5 == 0) {
-	  let index = 0
+		let index = 0;
 		bot.inventory.forEach(function(item) {
 			let bool = false;
 			woodBlocks.forEach(function(wood) {
 				if (item.name == wood) {
 					bool = true;
-					let woodType = "Oak Planks";
-					if (wood == "Birch Log") {
-					  woodType = "Birch Planks";
+					let woodType = 'Oak Planks';
+					if (wood == 'Birch Log') {
+						woodType = 'Birch Planks';
 					}
 					let give = inventory.give(bot.inventory, woodType, item.count * 4);
 					bot.inventory = give.inventory;
@@ -616,16 +622,16 @@ var iterate = function(bot, game) {
 							give.leftOver
 						);
 					}
-					bot.inventory[index] = "Delete";
+					bot.inventory[index] = 'Delete';
 				}
 			});
 			index++;
 		});
 		let newInventory = [];
 		bot.inventory.forEach(function(object) {
-		  if (object !== "Delete") {
-		    newInventory.push(object);
-		  }
+			if (object !== 'Delete') {
+				newInventory.push(object);
+			}
 		});
 		bot.inventory = newInventory;
 	}

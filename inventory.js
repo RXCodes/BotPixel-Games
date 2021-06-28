@@ -8,9 +8,9 @@ const serialize = function(slotData) {
   
     // check if item is a block
     if (blocksJSON[slotData.name] !== undefined) {
-      slotData.type = "Block/";
+      slotData.type = "Blocks/";
     } else {
-      slotData.type = "Item/";
+      slotData.type = "Items/";
     }
   
 }

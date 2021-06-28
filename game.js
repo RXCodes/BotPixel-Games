@@ -7,6 +7,9 @@ const inventory = require('./inventory');
 const maxItemLifetime = 30;
 const maxItemEntities = 50;
 blocksJSON = {};
+const getBlock = function(block) {
+  return blocksJSON[block] || {};
+}
 
 function shuffle(array) {
 	var currentIndex = array.length,
@@ -208,7 +211,7 @@ const runGame = function(game) {
 			);
 			game.itemEntities[index] = 'delete';
 		} else {
-			item.y -= 0.3;
+			item.y -= 0.45;
 			if (
 				game.world[Math.round(item.x) + ',' + Math.round(item.y - 0.35)] !==
 				undefined
@@ -328,7 +331,7 @@ const movePlayer = function(uuid, player, packet) {
 
 // summon an item at a given position
 const summonItem = function(uuid, x, y, item, count) {
-	type = 'Blocks/';
+	let type = 'Blocks/';
 	if (blocksJSON[item] == undefined) {
 		type = 'Items/';
 	}
@@ -378,16 +381,20 @@ const destroyBlockEvent = function(x, y, playerUUID, worldUUID) {
 				let give = inventory.give(player.inventory, blockData.drops, 1);
 				player.inventory = give.inventory;
 				if (give.success == true) {
+				  let type = "Items/";
+				  if (getBlock(blockData.drops).breakDuration) {
+				    type = "Blocks/";
+				  }
 					pushEvent(worldUUID, 'Pick Up Item', {
 						x,
 						y,
-						type: 'Blocks/',
+						type,
 						item: blockData.drops,
 						uuid: player.uuid
 					});
 				}
 				if (give.leftOver > 0 && give.success) {
-					summonItem(worldUUID, bot.x, bot.y, blockData.drops, give.leftOver);
+					summonItem(worldUUID, player.x, player.y, blockData.drops, give.leftOver);
 				}
 				if (!give.success) {
 					summonItem(worldUUID, x, y, blockData.drops, give.leftOver);
@@ -395,6 +402,45 @@ const destroyBlockEvent = function(x, y, playerUUID, worldUUID) {
 			}
 		}
 		destroyBlock(worldUUID, x, y, playerUUID);
+		return { success: true };
+	}
+
+	return { success: true };
+};
+
+// place block event via player
+const placeBlockEvent = function(x, y, slotID, playerUUID, worldUUID) {
+	if (!games[worldUUID]) {
+		return { success: false };
+	}
+
+	if (!games[worldUUID].world[x + ',' + y]) {
+	  
+	  // get player object
+	  let players = games[worldUUID].playerObjects;
+	  let player = undefined;
+	  players.forEach(function(object) {
+	    if (object.uuid == playerUUID) {
+	      player = object;
+	    }
+	  });
+	  if (!player) {
+	    return {success: false};
+	  }
+	  
+	  // check slot
+	  if ((player.inventory[slotID] || {}).type !== "Blocks/") {
+	    return {success: false};
+	  }
+	  
+	  // place block
+	  let slot = player.inventory[slotID];
+	  player.inventory[slotID].count--;
+	  if (player.inventory[slotID].count == 0) {
+	    player.inventory.splice(slotID, 1);
+	  }
+		placeBlock(worldUUID, x, y, slot.name);
+		
 		return { success: true };
 	}
 
@@ -489,6 +535,7 @@ exports.emit = pushEvent;
 exports.summonItem = summonItem;
 exports.move = movePlayer;
 exports.destroyBlockEvent = destroyBlockEvent;
+exports.placeBlockEvent = placeBlockEvent;
 exports.updateInventory = updateInventory;
 
 // match regulation

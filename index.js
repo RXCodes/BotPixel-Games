@@ -141,7 +141,17 @@ io.on('connection', function(socket) {
 				gameHandler.destroyBlockEvent(parsedPacket.x, parsedPacket.y, socket.uuid, socket.room);
 			}
 			let inv = gameHandler.updateInventory(socket.room, socket.uuid);
-			io.to(socket.id).emit('update inventory', inv);
+			io.to(socket.id).emit('update inventory', JSON.stringify(inv));
+		}
+	});
+	socket.on('place block', function(packet, callback) {
+		if (isDictionary(packet) && socket.ingame) {
+			let parsedPacket = JSON.parse(packet);
+			if (
+				checkPacket(parsedPacket, ['x', 'y', 'slotID'])
+			) {
+				gameHandler.placeBlockEvent(parsedPacket.x, parsedPacket.y, parsedPacket.slotID, socket.uuid, socket.room);
+			}
 		}
 	});
 	socket.on('start mine', function(packet, callback) {
