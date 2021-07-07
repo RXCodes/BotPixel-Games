@@ -6,10 +6,13 @@ const blockUpdate = require('./blockupdates');
 const inventory = require('./inventory');
 const maxItemLifetime = 30;
 const maxItemEntities = 50;
+const worldHeightLimit = 200;
 blocksJSON = {};
 const getBlock = function(block) {
-  return blocksJSON[block] || {};
-}
+	return blocksJSON[block] || {};
+};
+const setup = require('./setup');
+io = setup.io();
 
 function shuffle(array) {
 	var currentIndex = array.length,
@@ -60,12 +63,13 @@ startMatch = function(world, uuid, players) {
 		crateContents: world.crateLoot
 	};
 
-	let spawnPlayer = function(x, y, id, type) {
+	let spawnPlayer = function(x, y, id, type, name) {
 		defaultWidth = 0.75;
 		defaultHeight = 1.85;
 		let object = {
 			x,
 			y,
+			name,
 			width: defaultWidth,
 			height: defaultHeight,
 			widthHalf: defaultWidth / 2,
@@ -82,7 +86,56 @@ startMatch = function(world, uuid, players) {
 			xFlip: 0,
 			type,
 			walking: false,
-			prevX: '?'
+			prevX: '?',
+			playzoneDamageDelay: 0,
+			worldUUID: uuid,
+			addToHealth: function(add, event) {
+				this.health += add;
+				this.health = Math.max(this.health, 0);
+				this.health = Math.min(this.health, 100);
+				if (add < 0) {
+					this.healthRegenDelay = 100;
+				}
+				if (this.type == 'Player') {
+					io.to(this.uuid).emit('Health Update', {
+						type: event || 'Regeneration',
+						change: add,
+						hp: this.health
+					});
+				}
+				if (this.health == 0) {
+					if (this.type == 'Player') {
+						io.to(this.uuid).emit('death', Date.now() / 1000);
+					}
+
+					// player death
+					let worldUUID = this.worldUUID;
+					let x = this.x;
+					let y = this.y;
+					let uuid = this.uuid;
+					io.to(worldUUID).emit('death announce', {
+						playersLeft: games[worldUUID].playerObjects.length - 1,
+						cause: event,
+						uuid
+					});
+					this.inventory.forEach(function(item) {
+						summonItem(
+							worldUUID,
+							x + Math.random(),
+							y + Math.random(),
+							item.name,
+							item.count
+						);
+					});
+					let checkIndex = 0;
+					games[worldUUID].playerObjects.forEach(function(player) {
+						if (uuid == player.uuid) {
+							games[worldUUID].playerObjects.splice(checkIndex, 1);
+						}
+						checkIndex++;
+					});
+				}
+			}
 		};
 		games[uuid].playerObjects.push(object);
 	};
@@ -92,7 +145,7 @@ startMatch = function(world, uuid, players) {
 	let playerPositions = {};
 	let playerArray = shuffle(players);
 	playerArray.forEach(function(player) {
-		spawnPlayer((i - 5) * 10 + 5, 95, player.id, player.type);
+		spawnPlayer((i - 5) * 10 + 5, 95, player.id, player.type, player.name);
 		if (player.type == 'Player') {
 			playerPositions[player.id] = {
 				x: (i - 5) * 10 + 5,
@@ -159,8 +212,7 @@ const runGame = function(game) {
 		object.healthRegenDelay--;
 		if (object.healthRegenDelay <= 0) {
 			object.healthRegenDelay = 100;
-			object.health = Math.max(object.health + 1, 100);
-			pushEvent(object.uuid, 'update health', object.health);
+			object.addToHealth(5);
 		}
 
 		// walk animations
@@ -179,14 +231,13 @@ const runGame = function(game) {
 	};
 
 	let playerMovePacket = [];
-	let requireKeys = ['x', 'y', 'uuid', 'health', 'xFlip'];
+	let requireKeys = ['x', 'y', 'uuid', 'health', 'xFlip', 'name'];
 	game.playerObjects.forEach(function(player) {
 		if (player.type == 'Bot') {
 			botFunction.iterate(player, game);
 		}
 		if (game.matchBegins < Date.now()) {
 			playerPhysics(player);
-			match(game);
 		}
 		let packet = {};
 		requireKeys.forEach(function(key) {
@@ -194,7 +245,10 @@ const runGame = function(game) {
 		});
 		playerMovePacket.push(packet);
 	});
-	pushEvent(game.uuid, 'Player Move', playerMovePacket, 'normal');
+	if (game.matchBegins < Date.now()) {
+		match(game);
+	}
+	io.to(game.uuid).emit('Player Move', playerMovePacket);
 
 	// item drops
 	game.itemEntities.forEach(function(item) {
@@ -222,50 +276,89 @@ const runGame = function(game) {
 		index++;
 	});
 
+	// map players to position
+	let posMap = {};
+	game.playerObjects.forEach(function(player) {
+		posMap[Math.round(player.x) + ',' + Math.floor(player.y)] = player.uuid;
+	});
+
 	// delete item drops and send data to players
 	let itemsArray = [];
 	game.itemEntities.forEach(function(item) {
 		if (item !== 'delete') {
-			itemsArray.push(item);
+			// check if item is colliding with any player
+			if (posMap[Math.round(item.x) + ',' + Math.round(item.y)]) {
+				// player picks up items
+				let player = {};
+				game.playerObjects.forEach(function(object) {
+					if (
+						object.uuid == posMap[Math.round(item.x) + ',' + Math.round(item.y)]
+					) {
+						player = object;
+					}
+				});
+				let give = inventory.give(
+					player.inventory || [],
+					item.name,
+					item.count
+				);
+				player.inventory = give.inventory;
+				if (give.success == true) {
+					let type = 'Items/';
+					if (getBlock(item.name).breakDuration) {
+						type = 'Blocks/';
+					}
+					pushEvent(game.uuid, 'Pick Up Item', {
+						x: item.x,
+						y: item.y,
+						type,
+						item: item.name,
+						uuid: player.uuid
+					});
+					pushEvent(game.uuid, 'Delete Item', item.id);
+				}
+				if (give.leftOver > 0 && give.success) {
+					summonItem(world.uuid, player.x, player.y, item.name, give.leftOver);
+					io.to(player.uuid).emit('update inventory', player.inventory);
+				}
+				if (!give.success) {
+					itemsArray.push(item);
+				}
+			} else {
+				itemsArray.push(item);
+			}
 		}
 	});
 	game.itemEntities = itemsArray;
-	pushEvent(game.uuid, 'Items Move', itemsArray, 'normal');
+	io.to(game.uuid).emit('Items Move', itemsArray);
 };
 
 // world interaction
-pushEvent = function(worldUUID, event, data, type = 'normal') {
-	gameEvents.push({
-		uuid: worldUUID,
-		event,
-		data,
-		type
-	});
+pushEvent = function(worldUUID, event, data) {
+	io.to(worldUUID).emit(event, data);
 };
 
 // request player inventory / send inventory data to player
 const updateInventory = function(worldUUID, playerUUID) {
-  
-  // check if the world exists
-  if (games[worldUUID] == undefined) {
-    return [];
-  }
-  
-  // get player object
-  let player = undefined;
-  games[worldUUID].playerObjects.forEach(function(object) {
-    if (object.uuid == playerUUID) {
-      player = object;
-    }
-  });
-  if (player == undefined) {
-    return [];
-  }
-  
-  // send inventory data to player
-  return player.inventory;
-  
-}
+	// check if the world exists
+	if (games[worldUUID] == undefined) {
+		return [];
+	}
+
+	// get player object
+	let player = undefined;
+	games[worldUUID].playerObjects.forEach(function(object) {
+		if (object.uuid == playerUUID) {
+			player = object;
+		}
+	});
+	if (player == undefined) {
+		return [];
+	}
+
+	// send inventory data to player
+	return player.inventory;
+};
 
 // request a chunk update given block coordinates
 const updateChunk = function(worldUUID, x, y, chunkSize = 5) {
@@ -298,6 +391,9 @@ const destroyBlock = function(worldUUID, x, y, uuid = 'bot') {
 
 // place a block at a given position
 const placeBlock = function(worldUUID, x, y, block, blockData = {}) {
+	if (y > worldHeightLimit) {
+		return;
+	}
 	let position = x + ',' + y;
 	pushEvent(worldUUID, 'Place Block', {
 		x,
@@ -317,12 +413,17 @@ const placeBlock = function(worldUUID, x, y, block, blockData = {}) {
 // move a player according to provided packet
 const movePlayer = function(uuid, player, packet) {
 	let index = 0;
+
+	if (!games[uuid]) {
+		return;
+	}
+
 	games[uuid].playerObjects.forEach(function(object) {
-		if (object.uuid == uuid) {
-			object.x = packet.xPos;
-			object.y = packet.yPos;
-			object.xVelocity = packet.xVelocity / 10;
-			object.yVelocity = packet.yVelocity / 10;
+		if (object.uuid == player) {
+			object.x = parseFloat(packet.xPos);
+			object.y = parseFloat(packet.yPos);
+			object.xVelocity = parseFloat(packet.xVelocity) / 11.5;
+			object.yVelocity = parseFloat(packet.yVelocity) / 11.5;
 			games[uuid].playerObjects[index] = object;
 		}
 		index++;
@@ -362,29 +463,28 @@ const destroyBlockEvent = function(x, y, playerUUID, worldUUID) {
 	}
 
 	if (games[worldUUID].world[x + ',' + y]) {
-	  
-	  // get player object
-	  let players = games[worldUUID].playerObjects;
-	  let player = undefined;
-	  players.forEach(function(object) {
-	    if (object.uuid == playerUUID) {
-	      player = object;
-	    }
-	  });
-	  if (!player) {
-	    return {success: false};
-	  }
-	  
+		// get player object
+		let players = games[worldUUID].playerObjects;
+		let player = undefined;
+		players.forEach(function(object) {
+			if (object.uuid == playerUUID) {
+				player = object;
+			}
+		});
+		if (!player) {
+			return { success: false };
+		}
+
 		blockData = blocksJSON[games[worldUUID].world[x + ',' + y]];
 		if (blockData !== undefined) {
 			if (blockData.drops !== undefined) {
 				let give = inventory.give(player.inventory, blockData.drops, 1);
 				player.inventory = give.inventory;
 				if (give.success == true) {
-				  let type = "Items/";
-				  if (getBlock(blockData.drops).breakDuration) {
-				    type = "Blocks/";
-				  }
+					let type = 'Items/';
+					if (getBlock(blockData.drops).breakDuration) {
+						type = 'Blocks/';
+					}
 					pushEvent(worldUUID, 'Pick Up Item', {
 						x,
 						y,
@@ -394,7 +494,13 @@ const destroyBlockEvent = function(x, y, playerUUID, worldUUID) {
 					});
 				}
 				if (give.leftOver > 0 && give.success) {
-					summonItem(worldUUID, player.x, player.y, blockData.drops, give.leftOver);
+					summonItem(
+						worldUUID,
+						player.x,
+						player.y,
+						blockData.drops,
+						give.leftOver
+					);
 				}
 				if (!give.success) {
 					summonItem(worldUUID, x, y, blockData.drops, give.leftOver);
@@ -415,32 +521,31 @@ const placeBlockEvent = function(x, y, slotID, playerUUID, worldUUID) {
 	}
 
 	if (!games[worldUUID].world[x + ',' + y]) {
-	  
-	  // get player object
-	  let players = games[worldUUID].playerObjects;
-	  let player = undefined;
-	  players.forEach(function(object) {
-	    if (object.uuid == playerUUID) {
-	      player = object;
-	    }
-	  });
-	  if (!player) {
-	    return {success: false};
-	  }
-	  
-	  // check slot
-	  if ((player.inventory[slotID] || {}).type !== "Blocks/") {
-	    return {success: false};
-	  }
-	  
-	  // place block
-	  let slot = player.inventory[slotID];
-	  player.inventory[slotID].count--;
-	  if (player.inventory[slotID].count == 0) {
-	    player.inventory.splice(slotID, 1);
-	  }
+		// get player object
+		let players = games[worldUUID].playerObjects;
+		let player = undefined;
+		players.forEach(function(object) {
+			if (object.uuid == playerUUID) {
+				player = object;
+			}
+		});
+		if (!player) {
+			return { success: false };
+		}
+
+		// check slot
+		if ((player.inventory[slotID] || {}).type !== 'Blocks/') {
+			return { success: false };
+		}
+
+		// place block
+		let slot = player.inventory[slotID];
+		player.inventory[slotID].count--;
+		if (player.inventory[slotID].count == 0) {
+			player.inventory.splice(slotID, 1);
+		}
 		placeBlock(worldUUID, x, y, slot.name);
-		
+
 		return { success: true };
 	}
 
@@ -484,7 +589,7 @@ const sendChunkUpdates = function(game) {
 		}
 
 		// send chunk update
-		pushEvent(game.uuid, 'Chunk Update', {
+		io.to(game.uuid).emit('Chunk Update', {
 			x: chunkX,
 			y: chunkY,
 			data: blocks,
@@ -498,7 +603,11 @@ const sendChunkUpdates = function(game) {
 
 // end match
 var endMatch = function(uuid) {
+	if (!games[uuid]) {
+		return;
+	}
 	pushEvent(uuid, 'Match End', { type: 'Room Expired.' });
+	clearTimeout((games[uuid] || {}).timer);
 	delete games[uuid];
 };
 
@@ -543,9 +652,8 @@ const match = function(game) {
 	// prepare next playzone
 	let nextZone = function() {
 		game.transitionDuration = 15;
-		let sizes = [70, 50, 40, 25, 10, 0];
-		let xOffset = Math.round((Math.random() - 0.5) * game.borderSize * 0.4);
-		game.zoneIteration++;
+		let sizes = [70, 50, 30, 15, 7.5, 0, 0];
+		let xOffset = (Math.random() - 0.5) * game.borderSize * 0.3;
 		let delay = 40;
 		if (game.zoneIteration > 2) {
 			delay = 25;
@@ -559,26 +667,35 @@ const match = function(game) {
 		game.initialZoneXOffset = game.playzoneXOffset;
 		game.nextZone = Date.now() + delay * 1000;
 		game.targetSize = sizes[game.zoneIteration - 1];
-		game.targetZoneX = xOffset;
+		if (game.zoneIteration < 6) {
+			game.targetZoneX = xOffset;
+		}
 		game.zoneActive = true;
 
 		pushEvent(game.uuid, 'Playzone', {
-			'next zone': game.nextZone,
+			'next zone': game.nextZone / 1000,
 			'target size': game.targetSize,
 			'zone x': game.targetZoneX,
 			'transition duration': game.transitionDuration
 		});
+		game.playerObjects.forEach(function(player) {
+			if (player.type == 'Bot' && Math.random() < 0.9) {
+				player.playzoneWarn();
+			}
+		});
 	};
 
 	// initiate grace period
-	if (!game.gracePeriod && Date.now() - game.startTime >= 1000 * 10) {
+	if (!game.gracePeriod && Date.now() - game.startTime >= 1000 * 30) {
 		game.gracePeriod = Date.now() + 30 * 1000;
 		pushEvent(game.uuid, 'Grace Period', game.gracePeriod / 1000);
 	} else {
 		if (game.gracePeriod < Date.now() && !game.pvp) {
 			pushEvent(game.uuid, 'Grace Period End', {});
-			game.zoneIteration = 0;
-			nextZone();
+			game.zoneIteration = 1;
+			game.timer = setTimeout(function() {
+				nextZone();
+			}, 8 * 1000);
 			game.pvp = true;
 		}
 	}
@@ -588,10 +705,15 @@ const match = function(game) {
 		if (!game.zoneClosing) {
 			game.zoneClosing = true;
 			pushEvent(game.uuid, 'Playzone Shrink', {
-				'next zone': game.nextZone,
+				'next zone': game.nextZone / 1000,
 				'target size': game.targetSize,
 				'zone x': game.targetZoneX,
 				'transition duration': game.transitionDuration
+			});
+			game.playerObjects.forEach(function(player) {
+				if (player.type == 'Bot') {
+					player.playzoneWarn();
+				}
 			});
 		}
 		let percent =
@@ -601,11 +723,33 @@ const match = function(game) {
 		game.playzoneSize += percent * (game.targetSize - game.initialTargetSize);
 		game.playzoneXOffset +=
 			percent * (game.targetZoneX - game.initialZoneXOffset);
-		if (percent >= 1 && game.zoneIteration <= 5) {
+		if (percent >= 1 && game.zoneIteration <= 7) {
 			game.zoneClosing = false;
+			game.zoneIteration++;
 			nextZone();
-		} else if (game.zoneIteration == 6) {
+		} else if (game.zoneIteration == 8) {
 			game.zoneActive = false;
 		}
 	}
+
+	// damage players outside of playzone
+	let zoneWidthHalf = game.playzoneSize / 2;
+	let playerIndex = 0;
+	game.playerObjects.forEach(function(player) {
+		if (
+			player.x < game.playzoneXOffset - zoneWidthHalf ||
+			player.x > game.playzoneXOffset + zoneWidthHalf
+		) {
+			if (Math.abs(player.playzoneDamageDelay - Date.now()) >= 1000) {
+				let playzoneDamage = 5 + Math.floor(game.zoneIteration / 2) * 5;
+				player.playzoneDamageDelay = Date.now();
+				player.addToHealth(-playzoneDamage, 'Playzone');
+				io.to(game.uuid).emit('Playzone Hit', player.uuid);
+				if (player.type == 'Bot') {
+					player.playzoneWarn();
+				}
+			}
+		}
+		playerIndex++;
+	});
 };

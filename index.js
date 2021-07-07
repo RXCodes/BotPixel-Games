@@ -1,10 +1,8 @@
 // -- This is where you tell the server what to do! -- \\
 
 // load necessary modules to start a socket.io server
-const http = require('http');
-const express = require('express');
-const socketio = require('socket.io');
-const path = require('path');
+const setup = require('./setup');
+io = setup.io();
 
 // load custom-created modules
 const leaderboards = require('./leaderboard');
@@ -43,18 +41,17 @@ function generateUUID() {
 	});
 }
 
-// initiate socket.io server
-const app = express();
-const httpserver = http.Server(app);
-const io = socketio(httpserver);
-const gamedirectory = path.join(__dirname, 'html');
-app.use(express.static(gamedirectory));
-httpserver.listen(3000);
-
 // reference a socket by id
 const getSocket = function(id) {
-  return io.sockets.connected[id] || {};
+	return io.sockets.connected[id] || {};
 };
+
+// generate bot name
+const generateBotName = function() {
+  let name = "Bot";
+  name += Math.round(Math.random() * 10000);
+  return name;
+}
 
 // socket.io events
 io.on('connection', function(socket) {
@@ -63,6 +60,13 @@ io.on('connection', function(socket) {
 	socket.uuid = socket.id;
 	socket.matchmaking = false;
 	socket.ingame = false;
+	socket.name = 'Guest';
+
+	socket.on('change name', function(input, callback) {
+		if (input.length >= 3 && input.length <= 20) {
+			socket.name = input;
+		}
+	});
 
 	socket.on('fetch leaderboard', function(leaderboardName, callback) {
 		callback(leaderboards.sortLeaderboard(leaderboardName));
@@ -135,10 +139,13 @@ io.on('connection', function(socket) {
 	socket.on('destroy block', function(packet, callback) {
 		if (isDictionary(packet) && socket.ingame) {
 			let parsedPacket = JSON.parse(packet);
-			if (
-				checkPacket(parsedPacket, ['x', 'y'])
-			) {
-				gameHandler.destroyBlockEvent(parsedPacket.x, parsedPacket.y, socket.uuid, socket.room);
+			if (checkPacket(parsedPacket, ['x', 'y'])) {
+				gameHandler.destroyBlockEvent(
+					parseInt(parsedPacket.x),
+					parseInt(parsedPacket.y),
+					socket.uuid,
+					socket.room
+				);
 			}
 			let inv = gameHandler.updateInventory(socket.room, socket.uuid);
 			io.to(socket.id).emit('update inventory', JSON.stringify(inv));
@@ -147,36 +154,43 @@ io.on('connection', function(socket) {
 	socket.on('place block', function(packet, callback) {
 		if (isDictionary(packet) && socket.ingame) {
 			let parsedPacket = JSON.parse(packet);
-			if (
-				checkPacket(parsedPacket, ['x', 'y', 'slotID'])
-			) {
-				gameHandler.placeBlockEvent(parsedPacket.x, parsedPacket.y, parsedPacket.slotID, socket.uuid, socket.room);
+			if (checkPacket(parsedPacket, ['x', 'y', 'slotID'])) {
+				gameHandler.placeBlockEvent(
+					parseInt(parsedPacket.x),
+					parseInt(parsedPacket.y),
+					parseInt(parsedPacket.slotID),
+					socket.uuid,
+					socket.room
+				);
 			}
 		}
+	});
+	socket.on('animation', function(packet, callback) {
+	  if (socket.ingame) {
+	    socket.to(socket.room).emit("animation", packet);
+	  }
 	});
 	socket.on('start mine', function(packet, callback) {
 		if (isDictionary(packet) && socket.ingame) {
 			let parsedPacket = JSON.parse(packet);
-			if (
-				checkPacket(parsedPacket, ['x', 'y'])
-			) {
-			  parsedPacket.uuid = socket.uuid;
-				io.to(socket.room).emit("Mine", parsedPacket);
+			if (checkPacket(parsedPacket, ['x', 'y'])) {
+				parsedPacket.uuid = socket.uuid;
+				io.to(socket.room).emit('Mine', parsedPacket);
 			}
 		}
 	});
 	socket.on('cancel mine', function(packet, callback) {
 		if (socket.ingame) {
-			io.to(socket.room).emit("Cancel Mine", {uuid: socket.uuid});
+			io.to(socket.room).emit('Cancel Mine', { uuid: socket.uuid });
 		}
 	});
 
-  // get timestamp
+	// get timestamp
 	socket.on('get timestamp', function(packet, callback) {
 		callback('Success', Date.now() / 1000);
 	});
 
-  // fetch block data
+	// fetch block data
 	socket.on('get block data', function(packet, callback) {
 		callback(blockData.get());
 	});
@@ -189,18 +203,18 @@ io.on('connection', function(socket) {
 			quene[packet['mode']] = quene[packet['mode']] || {};
 			if (quene[packet['mode']] == {}) {
 				queneCurrent[packet['mode']] = generateUUID();
-				
+
 				// random chance to have bots
 				if (Math.random() < 0.4) {
 					let clones = 2 + Math.round(Math.random() * 5);
 					for (i = 0; i < clones; i++) {
 						quene[packet['mode']][generateUUID()] = {
 							type: 'Bot',
-							uuid: generateUUID()
+							uuid: generateUUID(),
+							name: generateBotName()
 						};
 					}
 				}
-				
 			}
 			socket.join(queneCurrent[packet['mode']]);
 			socket.room = queneCurrent[packet['mode']];
@@ -208,7 +222,8 @@ io.on('connection', function(socket) {
 			quene[packet['mode']][socket.id] = {
 				uuid: socket.uuid,
 				type: 'Player',
-				id: socket.id
+				id: socket.id,
+				name: socket.name
 			};
 			callback({
 				players: Object.keys(quene[packet['mode']]).length,
@@ -248,6 +263,15 @@ io.on('connection', function(socket) {
 	socket.on('disconnect', function(packet, callback) {
 		cancelMatchmake('A player disconnected.');
 	});
+
+	socket.on('quit game', function(packet, callback) {
+		if (socket.ingame) {
+			socket.ingame = false;
+			socket.leave(socket.room);
+			socket.matchmaking = false;
+		}
+		callback('done');
+	});
 });
 
 // matchmaking process
@@ -270,7 +294,8 @@ const matchmake = function() {
 			if (Math.random() < 0.15) {
 				quene[key][generateUUID()] = {
 					type: 'Bot',
-					uuid: generateUUID()
+					uuid: generateUUID(),
+					name: generateBotName()
 				};
 				io.to(queneCurrent[key]).emit(
 					'update count',
@@ -286,13 +311,11 @@ const matchmake = function() {
 			let ids = [];
 			Object.keys(quene[key]).forEach(function(player) {
 				if (quene[key][player].type == 'Player') {
-					io.to(player).ingame = true;
-					io.to(player).matchmaking = false;
 					io.to(player).emit('set id', player);
 					start = true;
-					ids.push({ type: 'Player', id: player });
+					ids.push({ type: 'Player', id: player, name: quene[key][player].name});
 				} else {
-					ids.push({ type: 'Bot', id: player });
+					ids.push({ type: 'Bot', id: player, name: quene[key][player].name });
 				}
 			});
 			if (start) {
@@ -308,7 +331,7 @@ const matchmake = function() {
 					io.to(roomUUID).emit('loot', world.crateLoot);
 				}, 1000);
 			}
-			
+
 			// destroy matchmaking room if full
 			deleteQuenes.push(key);
 		}
@@ -327,13 +350,15 @@ setInterval(function() {
 	gameHandler.gameClock();
 
 	// send in-game event data to players
-	gameHandler.gameEvents().forEach(function(event) {
-		if (event.type !== 'volatile') {
-			io.in(event.uuid).emit(event.event, event.data);
-		} else {
-			io.volatile.in(event.uuid).emit(event.event, event.data);
-		}
-	});
+	if (false) {
+		gameHandler.gameEvents().forEach(function(event) {
+			if (event.type !== 'volatile') {
+				io.in(event.uuid).emit(event.event, event.data);
+			} else {
+				io.volatile.in(event.uuid).emit(event.event, event.data);
+			}
+		});
+	}
 
 	matchmake();
 

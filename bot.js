@@ -132,9 +132,28 @@ var iterate = function(bot, game) {
 				let useSlot = place.solidBlockSlots[0];
 				let newX = bot.getPos(x, y).x;
 				let newY = bot.getPos(x, y).y;
-				world.placeBlock(uuid, newX, newY, bot.inventory[useSlot].name);
-				inv = inventory.remove(bot.inventory, useSlot, 1);
-				bot.inventory = inv.inventory;
+				if (game.world[x + ',' + 'y'] == undefined) {
+					world.placeBlock(uuid, newX, newY, bot.inventory[useSlot].name);
+					inv = inventory.remove(bot.inventory, useSlot, 1);
+					bot.inventory = inv.inventory;
+				}
+			}
+		};
+
+		// warn bots to move into playzone
+		bot.playzoneWarn = function() {
+			let x = this.x;
+			let y = this.y;
+			let bot = this;
+			if (!this.playzoneWarned) {
+				bot.playzoneWarned = true;
+				bot.stopMining();
+				bot.status = 'Travelling';
+				bot.destination.x = game.playzoneXOffset + Math.random();
+				bot.destination.y = y;
+				setTimeout(function() {
+					bot.playzoneWarned = false;
+				}, 10 * 1000);
 			}
 		};
 	}
@@ -317,7 +336,7 @@ var iterate = function(bot, game) {
 
 			// check depth
 			let depth = 0;
-			for (i = 1; i <= 6; i++) {
+			for (i = 1; i <= 5; i++) {
 				if (bot.checkCollision(xOff, -i)) {
 					break;
 				} else {
@@ -326,7 +345,7 @@ var iterate = function(bot, game) {
 			}
 
 			// attempt to jump over or cover hole
-			if (depth >= 6) {
+			if (depth >= 4) {
 				if (!bot.jump()) {
 					bot.placeBlock(xOff, -1);
 				}
@@ -335,7 +354,7 @@ var iterate = function(bot, game) {
 
 		// sense of time while travelling
 		bot.travelTime++;
-		if (bot.travelTime % 5 == 0) {
+		if (bot.travelTime % 6 == 0) {
 			// is the bot getting closer to the destination?
 			if (
 				bot.currentDistance >
@@ -561,7 +580,7 @@ var iterate = function(bot, game) {
 		// move around
 		if (Math.round(bot.y) == bot.preferredYPosition) {
 			bot.status = 'Travelling';
-			let x = Math.random() * game.playzoneSize - 10;
+			let x = Math.random() * game.playzoneSize - 10 + game.playzoneXOffset;
 			let y = bot.preferredYPosition * ((Math.random() - 0.5) * 20);
 			bot.destination = { x, y };
 			bot.debugChat('now mining around...');
