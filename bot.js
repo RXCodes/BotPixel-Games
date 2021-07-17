@@ -1,6 +1,7 @@
 world = require('./game');
 const blockDataScope = require('./blocks');
 const inventory = require('./inventory');
+const pathfind = require('./pathfind');
 blocksJSON = {};
 const reach = 5; // radius
 const woodBlocks = ['Oak Log', 'Birch Log'];
@@ -12,6 +13,8 @@ const distance = function(x, y, x2, y2) {
 	yDelta = (y2 - y) * (y2 - y);
 	return Math.sqrt(xDelta + yDelta);
 };
+const setup = require('./setup');
+io = setup.io();
 
 var iterate = function(bot, game) {
 	const uuid = game.uuid;
@@ -30,8 +33,10 @@ var iterate = function(bot, game) {
 		bot.blocksToBreak = {};
 		bot.mining = false;
 		bot.mineDuration = 0;
+		bot.miningTime = 0;
 		bot.mineStatusDuration = 0;
 		bot.busy = false;
+		bot.holding = 'Pickaxe';
 		blocksJSON = blockDataScope.blocks();
 
 		// jump function
@@ -91,7 +96,7 @@ var iterate = function(bot, game) {
 
 		// bot debug chat
 		bot.debugChat = function(msg) {
-			world.emit(uuid, 'Debug Chat', {
+			world.emit(uuid + '-debug', 'Debug Chat', {
 				uuid: bot.uuid,
 				msg
 			});
@@ -134,10 +139,35 @@ var iterate = function(bot, game) {
 				let newY = bot.getPos(x, y).y;
 				if (game.world[x + ',' + 'y'] == undefined) {
 					world.placeBlock(uuid, newX, newY, bot.inventory[useSlot].name);
+					let type = 'Items/';
+					if (getBlock(blockData.drops).breakDuration) {
+						type = 'Blocks/';
+					}
+					bot.holdItem(type + bot.inventory[useSlot].name);
 					inv = inventory.remove(bot.inventory, useSlot, 1);
 					bot.inventory = inv.inventory;
 				}
 			}
+		};
+
+		// pathfind destination
+		bot.pathfind = function(x, y) {
+			let result = pathfind.start(
+				{ x: Math.round(bot.x), y: Math.round(bot.y) },
+				{ x: Math.round(x), y: Math.round(y) },
+				game.blockCost
+			);
+			if (result.success) {
+				bot.status = 'Pathfinding';
+				bot.pathfinding = true;
+				bot.distanceValues = result.distanceMap;
+				bot.debugChat('Now pathfinding...');
+			} else {
+				bot.pathfinding = false;
+				bot.status = 'Travelling';
+				bot.debugChat('Failed to pathfind.');
+			}
+			bot.destination = { x, y };
 		};
 
 		// warn bots to move into playzone
@@ -148,12 +178,21 @@ var iterate = function(bot, game) {
 			if (!this.playzoneWarned) {
 				bot.playzoneWarned = true;
 				bot.stopMining();
-				bot.status = 'Travelling';
-				bot.destination.x = game.playzoneXOffset + Math.random();
-				bot.destination.y = y;
+				bot.pathfind(game.playzoneXOffset + Math.random(), y);
 				setTimeout(function() {
 					bot.playzoneWarned = false;
 				}, 10 * 1000);
+			}
+		};
+
+		// set bot to hold item
+		bot.holdItem = function(item) {
+			if (bot.holding !== item) {
+				bot.holding = item;
+				io.to(bot.worldUUID).emit('animation', {
+					uuid: bot.uuid,
+					name: '/hold ' + item
+				});
 			}
 		};
 	}
@@ -243,7 +282,7 @@ var iterate = function(bot, game) {
 						y = object.y;
 					}
 				});
-				bot.destination = { x, y };
+				bot.pathfind(x, y);
 				delete game.interests[x + ',' + y];
 			}
 		};
@@ -253,7 +292,68 @@ var iterate = function(bot, game) {
 		}
 	}
 
-	// travel to destination
+	// pathfind to destination
+	if (bot.status == 'Pathfinding') {
+		const getD = function(x, y) {
+			return bot.distanceValues[x + ',' + y] || 0;
+		};
+		let currentD = getD(bot.getPos().x, bot.getPos().y);
+		let currentDTop = getD(bot.getPos().x, bot.getPos().y + 1);
+		if (currentD == 0) {
+			bot.timer = setTimeout(function() {
+				bot.status = 'Travelling';
+			}, 1000);
+		} else {
+			clearTimeout(bot.timer);
+		}
+
+		// move left
+		if (currentD < getD(bot.getPos().x - 1, bot.getPos().y)) {
+			bot.horizontalMovement = -0.75;
+			bot.xVelocity = -0.75;
+			if (bot.checkCollision(-1, 0)) {
+				bot.pushBreak(bot.getPos().x - 1, bot.getPos().y);
+			}
+		}
+		if (currentDTop < getD(bot.getPos().x - 1, bot.getPos().y + 1)) {
+			bot.horizontalMovement = -0.75;
+			bot.xVelocity = -0.75;
+			if (bot.checkCollision(-1, 1)) {
+				bot.pushBreak(bot.getPos().x - 1, bot.getPos().y + 1);
+			}
+		}
+
+		// move right
+		if (currentD > getD(bot.getPos().x - 1, bot.getPos().y)) {
+			bot.horizontalMovement = 0.75;
+			bot.xVelocity = 0.75;
+			if (bot.checkCollision(1, 0)) {
+				bot.pushBreak(bot.getPos().x + 1, bot.getPos().y);
+			}
+		}
+		if (currentDTop > getD(bot.getPos().x - 1, bot.getPos().y + 1)) {
+			bot.horizontalMovement = 0.75;
+			bot.xVelocity = 0.75;
+			if (bot.checkCollision(-1, 1)) {
+				bot.pushBreak(bot.getPos().x - 1, bot.getPos().y + 1);
+			}
+		}
+
+		// jump and mine
+		if (currentD < currentDTop) {
+			bot.jump();
+			if (bot.checkCollision(0, 2) && bot.checkCollision(0, -1)) {
+				bot.pushBreak(bot.getPos().x, bot.getPos().y + 2);
+			}
+		}
+
+		// dig down
+		if (currentD < getD(bot.getPos().x, bot.getPos().y - 1)) {
+			bot.pushBreak(bot.getPos().x, bot.getPos().y - 1);
+		}
+	}
+
+	// travel to destination, no pathfinding
 	if (bot.status == 'Travelling') {
 		let xDelta = Math.abs(bot.destination.x - bot.x);
 
@@ -385,7 +485,10 @@ var iterate = function(bot, game) {
 
 	// bot has arrived at destination while travelling
 	if (bot.status == 'Travelling') {
-		if (distance(bot.x, bot.y, bot.destination.x, bot.destination.y) < 4) {
+		if (
+			Math.abs(bot.x - bot.destination.x) < y &&
+			Math.abs(bot.y - bot.destination.y) < 4
+		) {
 			// check for reason for going to this destination
 			bot.travelTime = 0;
 			bot.debugChat('successfully entered destination.');
@@ -527,7 +630,7 @@ var iterate = function(bot, game) {
 			// check if bot can reach the block
 			if (
 				distance(bot.x, bot.y, bot.targetX, bot.targetY) > reach &&
-				bot.mineDuration % 3 == 0
+				bot.mineDuration % 2 == 0
 			) {
 				cancelMine();
 				return;
@@ -581,7 +684,10 @@ var iterate = function(bot, game) {
 		if (Math.round(bot.y) == bot.preferredYPosition) {
 			bot.status = 'Travelling';
 			let x = Math.random() * game.playzoneSize - 10 + game.playzoneXOffset;
-			let y = bot.preferredYPosition * ((Math.random() - 0.5) * 20);
+			let y = Math.min(
+				bot.preferredYPosition * ((Math.random() - 0.5) * 20),
+				10
+			);
 			bot.destination = { x, y };
 			bot.debugChat('now mining around...');
 		}
@@ -609,7 +715,7 @@ var iterate = function(bot, game) {
 		bot.horizontalMovement = 0;
 		bot.lootTime--;
 		if (
-			game.crateContents[bot.crateX + ',' + bot.crateY] == {} ||
+			game.crateLoot[bot.crateX + ',' + bot.crateY] == {} ||
 			bot.lootTime <= 0
 		) {
 			bot.debugChat('done looting crate.');
@@ -653,6 +759,71 @@ var iterate = function(bot, game) {
 			}
 		});
 		bot.inventory = newInventory;
+	}
+
+	// mining animation
+	if (bot.mining) {
+		if (bot.miningTime == 0) {
+			bot.holding = 'Pickaxe';
+			io.to(bot.worldUUID).emit('animation', {
+				uuid: bot.uuid,
+				name: 'start mine animation'
+			});
+		}
+		bot.miningTime++;
+	}
+	if (bot.miningTime > 0 && !bot.mining) {
+		io.to(bot.worldUUID).emit('animation', {
+			uuid: bot.uuid,
+			name: 'stop mine animation'
+		});
+		bot.miningTime = 0;
+	}
+
+	// check surrounding players
+	let viewRadius = 8;
+	let combatRadius = 2.5;
+	let targetPlayer = undefined;
+	if (lifetime % 5 == 0 && game.pvp) {
+	  let combatRadiusUsed = false;
+		game.playerObjects.forEach(function(player) {
+			if (Math.abs(player.x - bot.x) <= viewRadius) {
+				if (Math.abs(player.y - bot.y) <= viewRadius) {
+					targetPlayer = player;
+				}
+			}
+		});
+		game.playerObjects.forEach(function(player) {
+			if (Math.abs(player.x - bot.x) <= combatRadius) {
+				if (Math.abs(player.y - bot.y) <= combatRadius) {
+				  combatRadiusUsed = true;
+					targetPlayer = player;
+				}
+			}
+		});
+
+		// flight of fight response
+		let response = "Flee"
+		if (targetPlayer !== undefined) {
+			if (bot.health > 50 || combatRadiusUsed) {
+				response = 'Fight';
+			}
+			if (bot.y + 3 < targetPlayer.y && bot.health > 20) {
+				response = 'Fight';
+			}
+		}
+		if (response == "Fight" && bot.status !== "Fighting") {
+		  bot.jump();
+		  bot.stopMining();
+		  bot.status = "Fighting";
+		  bot.target = targetPlayer.uuid;
+		}
+		if (bot.status !== "Fleeing" && response == "Flee") {
+		  bot.jump();
+		  bot.stopMining();
+		  bot.status = "Fleeing";
+		  bot.target = targetPlayer.uuid;
+		}
 	}
 };
 

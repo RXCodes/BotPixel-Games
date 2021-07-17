@@ -48,10 +48,10 @@ const getSocket = function(id) {
 
 // generate bot name
 const generateBotName = function() {
-  let name = "Bot";
-  name += Math.round(Math.random() * 10000);
-  return name;
-}
+	let name = 'Bot';
+	name += Math.round(Math.random() * 10000);
+	return name;
+};
 
 // socket.io events
 io.on('connection', function(socket) {
@@ -166,9 +166,13 @@ io.on('connection', function(socket) {
 		}
 	});
 	socket.on('animation', function(packet, callback) {
-	  if (socket.ingame) {
-	    socket.to(socket.room).emit("animation", packet);
-	  }
+		if (socket.ingame) {
+			socket.to(socket.room).emit('animation', {
+				uuid: socket.uuid,
+				name: packet
+			});
+			gameHandler.registerAnimation(socket.room, socket.uuid, packet);
+		}
 	});
 	socket.on('start mine', function(packet, callback) {
 		if (isDictionary(packet) && socket.ingame) {
@@ -177,6 +181,11 @@ io.on('connection', function(socket) {
 				parsedPacket.uuid = socket.uuid;
 				io.to(socket.room).emit('Mine', parsedPacket);
 			}
+		}
+	});
+	socket.on('bot debug', function(packet, callback) {
+		if (socket.ingame) {
+			socket.join(socket.room + '-debug');
 		}
 	});
 	socket.on('cancel mine', function(packet, callback) {
@@ -268,6 +277,7 @@ io.on('connection', function(socket) {
 		if (socket.ingame) {
 			socket.ingame = false;
 			socket.leave(socket.room);
+			socket.leave(socket.room + '-debug');
 			socket.matchmaking = false;
 		}
 		callback('done');
@@ -313,7 +323,11 @@ const matchmake = function() {
 				if (quene[key][player].type == 'Player') {
 					io.to(player).emit('set id', player);
 					start = true;
-					ids.push({ type: 'Player', id: player, name: quene[key][player].name});
+					ids.push({
+						type: 'Player',
+						id: player,
+						name: quene[key][player].name
+					});
 				} else {
 					ids.push({ type: 'Bot', id: player, name: quene[key][player].name });
 				}
@@ -375,4 +389,6 @@ setInterval(function() {
 }, 100);
 
 // ping all connected clients
-io.emit('timestamp', Date.now() / 1000);
+setInterval(function() {
+	io.emit('timestamp', Date.now() / 1000);
+}, 1000);

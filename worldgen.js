@@ -53,6 +53,7 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	let lightBlocks = {};
 	let interests = {};
 	let crateLoot = {};
+	let blockCost = {};
 
   // useful functions
   const getBlock = function(x, y) {
@@ -105,11 +106,13 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	  delete lightBlocks[position];
 	  delete collisions[position];
 	  delete interests[position];
+	  delete blockCost[position];
 	  if ((blocksJSON[id] || {}).glowing !== undefined) {
 	    lightBlocks[position] = id;
 	  }
 	  if ((blocksJSON[id] || {}).passable == undefined) {
 	    collisions[position] = true;
+	    blockCost[chunkPosition] = blocksJSON[id].breakDuration;
 	  }
 	  if ((blocksJSON[id] || {}).useful !== undefined) {
 	    interests[position] = id;
@@ -123,6 +126,7 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 		  delete collisions[position];
 			delete world[position];
 			delete worldBlockData[position];
+			delete blockCost[position];
 			let chunkX = Math.round(x / chunkSize) * chunkSize - 2;
 			let chunkY = Math.round(y / chunkSize) * chunkSize - 2;
 			delete chunks[chunkPosition(x, y, true)][x - chunkX + ',' + (y - chunkY)];
@@ -514,7 +518,8 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 		collisions,
 		chunks,
 		interests,
-		crateLoot
+		crateLoot,
+		blockCost
 	};
 };
 
