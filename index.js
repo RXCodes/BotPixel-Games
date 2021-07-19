@@ -209,15 +209,16 @@ io.on('connection', function(socket) {
 		let matchmake = function() {
 			let parsedPacket = JSON.parse(packet);
 			socket.matchmaking = true;
-			quene[packet['mode']] = quene[packet['mode']] || {};
-			if (quene[packet['mode']] == {}) {
-				queneCurrent[packet['mode']] = generateUUID();
+			quene[parsedPacket.mode] = quene[parsedPacket.mode] || {};
+			if (Object.keys(quene[parsedPacket.mode]).length == 0) {
+				queneCurrent[parsedPacket.mode] = generateUUID();
+				queneCapacity[parsedPacket.mode] = parseInt(parsedPacket.capacity || 10);
 
 				// random chance to have bots
 				if (Math.random() < 0.4) {
 					let clones = 2 + Math.round(Math.random() * 5);
 					for (i = 0; i < clones; i++) {
-						quene[packet['mode']][generateUUID()] = {
+						quene[parsedPacket['mode']][generateUUID()] = {
 							type: 'Bot',
 							uuid: generateUUID(),
 							name: generateBotName()
@@ -225,23 +226,24 @@ io.on('connection', function(socket) {
 					}
 				}
 			}
-			socket.join(queneCurrent[packet['mode']]);
-			socket.room = queneCurrent[packet['mode']];
-			socket.matchmakingMode = packet['mode'];
-			quene[packet['mode']][socket.id] = {
+			socket.join(queneCurrent[parsedPacket['mode']]);
+			socket.room = queneCurrent[parsedPacket['mode']];
+			socket.matchmakingMode = parsedPacket['mode'];
+			quene[parsedPacket['mode']][socket.id] = {
 				uuid: socket.uuid,
 				type: 'Player',
 				id: socket.id,
 				name: socket.name
 			};
 			callback({
-				players: Object.keys(quene[packet['mode']]).length,
-				quene: Object.keys(quene[packet['mode']]),
-				id: queneCurrent[packet['mode']]
+				players: Object.keys(quene[parsedPacket['mode']]).length,
+				quene: Object.keys(quene[parsedPacket['mode']]),
+				id: queneCurrent[parsedPacket['mode']],
+				capacity: queneCapacity[parsedPacket['mode']] || 10
 			});
-			io.to(queneCurrent[packet['mode']]).emit(
+			io.to(queneCurrent[parsedPacket['mode']]).emit(
 				'update count',
-				Object.keys(quene[packet['mode']]).length
+				Object.keys(quene[parsedPacket['mode']]).length
 			);
 		};
 		if (isDictionary(packet) && !socket.matchmaking && !socket.ingame) {
@@ -287,6 +289,7 @@ io.on('connection', function(socket) {
 // matchmaking process
 var quene = {};
 var queneCurrent = {};
+var queneCapacity = {};
 const matchmake = function() {
 	// loop through each matchmaking room
 	let deleteQuenes = [];
@@ -297,9 +300,11 @@ const matchmake = function() {
 		}
 
 		// if quene has players in it, randomly add bots
+		let repeat = Math.round(queneCapacity[key] / 10) + 1;
+		for (i = 0; i < repeat; i++) {
 		if (
 			Object.keys(quene[key] || {}).length >= 1 &&
-			Object.keys(quene[key] || {}).length < 10
+			Object.keys(quene[key] || {}).length < queneCapacity[key]
 		) {
 			if (Math.random() < 0.15) {
 				quene[key][generateUUID()] = {
@@ -313,9 +318,10 @@ const matchmake = function() {
 				);
 			}
 		}
+		}
 
 		// if quene is full, start match shortly
-		if (Object.keys(quene[key] || {}).length >= 10) {
+		if (Object.keys(quene[key] || {}).length >= queneCapacity[key]) {
 			let roomUUID = queneCurrent[key];
 			let start = false;
 			let ids = [];

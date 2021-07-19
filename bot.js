@@ -37,6 +37,7 @@ var iterate = function(bot, game) {
 		bot.mineStatusDuration = 0;
 		bot.busy = false;
 		bot.holding = 'Pickaxe';
+		bot.lifetimeInt = 0;
 		blocksJSON = blockDataScope.blocks();
 
 		// jump function
@@ -49,23 +50,33 @@ var iterate = function(bot, game) {
 			return false;
 		};
 
+		// follow enemy and attack
+		bot.fightEnemy = function(player) {
+			if (bot.status !== 'Fighting') {
+				bot.jump();
+				bot.status = 'Fighting';
+				bot.target = player;
+			}
+		};
+
 		// break block function
 		bot.break = function(x, y) {
 			blockData = blocksJSON[game.world[x + ',' + y]];
 			if (blockData !== undefined) {
 				if (blockData.drops !== undefined) {
-					let give = inventory.give(bot.inventory, blockData.drops, 1);
+				  const givePlayer = function(item, count) {
+					let give = inventory.give(bot.inventory, item, count);
 					bot.inventory = give.inventory;
 					if (give.success == true) {
 						let type = 'Items/';
-						if (getBlock(blockData.drops).breakDuration) {
+						if (getBlock(item).breakDuration) {
 							type = 'Blocks/';
 						}
 						world.emit(uuid, 'Pick Up Item', {
 							x,
 							y,
 							type,
-							item: blockData.drops,
+							item,
 							uuid: bot.uuid
 						});
 					}
@@ -74,13 +85,34 @@ var iterate = function(bot, game) {
 							uuid,
 							bot.x,
 							bot.y,
-							blockData.drops,
+							item,
 							give.leftOver
 						);
 					}
 					if (!give.success) {
-						world.summonItem(uuid, x, y, blockData.drops, give.leftOver);
+						world.summonItem(uuid, x, y, item, give.leftOver);
 					}
+				}
+				let usingJSON = true;
+				try {
+					blockData.drops.item;
+				} catch(e) {
+					usingJSON = false;
+				}
+
+				if (usingJSON) {
+					let count =
+						blockData.drops.minCount +
+						Math.round(
+							Math.random() *
+								(blockData.drops.maxCount - blockData.drops.minCount)
+						);
+					if (Math.random() < blockData.drops.chance || 1) {
+						givePlayer(blockData.drops.item, parseInt(count));
+					}
+				} else {
+					givePlayer(blockData.drops, 1);
+				}
 				}
 			}
 			world.destroyBlock(uuid, x, y);
@@ -151,14 +183,16 @@ var iterate = function(bot, game) {
 		};
 
 		// pathfind destination
-		bot.pathfind = function(x, y) {
+		bot.pathfind = function(x, y, intent = 'None') {
 			let result = pathfind.start(
 				{ x: Math.round(bot.x), y: Math.round(bot.y) },
 				{ x: Math.round(x), y: Math.round(y) },
 				game.blockCost
 			);
 			if (result.success) {
-				bot.status = 'Pathfinding';
+				if (intent !== 'Fight') {
+					bot.status = 'Pathfinding';
+				}
 				bot.pathfinding = true;
 				bot.distanceValues = result.distanceMap;
 				bot.debugChat('Now pathfinding...');
@@ -197,6 +231,7 @@ var iterate = function(bot, game) {
 		};
 	}
 	let lifetime = Math.round((Date.now() - bot.start) / 1000);
+	bot.lifetimeInt++;
 
 	// idle activity
 	if (bot.status == 'Idle' && bot.horizontalMovement == 0) {
@@ -293,7 +328,7 @@ var iterate = function(bot, game) {
 	}
 
 	// pathfind to destination
-	if (bot.status == 'Pathfinding') {
+	if (bot.status == 'Pathfinding' || bot.pathfinding) {
 		const getD = function(x, y) {
 			return bot.distanceValues[x + ',' + y] || 0;
 		};
@@ -302,6 +337,7 @@ var iterate = function(bot, game) {
 		if (currentD == 0) {
 			bot.timer = setTimeout(function() {
 				bot.status = 'Travelling';
+				bot.pathfinding = false;
 			}, 1000);
 		} else {
 			clearTimeout(bot.timer);
@@ -784,8 +820,8 @@ var iterate = function(bot, game) {
 	let viewRadius = 8;
 	let combatRadius = 2.5;
 	let targetPlayer = undefined;
-	if (lifetime % 5 == 0 && game.pvp) {
-	  let combatRadiusUsed = false;
+	if (bot.lifetimeInt % 5 == 0 && game.pvp) {
+		let combatRadiusUsed = false;
 		game.playerObjects.forEach(function(player) {
 			if (Math.abs(player.x - bot.x) <= viewRadius) {
 				if (Math.abs(player.y - bot.y) <= viewRadius) {
@@ -796,14 +832,14 @@ var iterate = function(bot, game) {
 		game.playerObjects.forEach(function(player) {
 			if (Math.abs(player.x - bot.x) <= combatRadius) {
 				if (Math.abs(player.y - bot.y) <= combatRadius) {
-				  combatRadiusUsed = true;
+					combatRadiusUsed = true;
 					targetPlayer = player;
 				}
 			}
 		});
 
 		// flight of fight response
-		let response = "Flee"
+		let response = 'Flee';
 		if (targetPlayer !== undefined) {
 			if (bot.health > 50 || combatRadiusUsed) {
 				response = 'Fight';
@@ -812,17 +848,40 @@ var iterate = function(bot, game) {
 				response = 'Fight';
 			}
 		}
-		if (response == "Fight" && bot.status !== "Fighting") {
-		  bot.jump();
-		  bot.stopMining();
-		  bot.status = "Fighting";
-		  bot.target = targetPlayer.uuid;
+		if (response == 'Fight' && bot.status !== 'Fighting') {
+			bot.jump();
+			bot.stopMining();
+			bot.status = 'Fighting';
+			bot.target = targetPlayer.uuid;
 		}
-		if (bot.status !== "Fleeing" && response == "Flee") {
-		  bot.jump();
-		  bot.stopMining();
-		  bot.status = "Fleeing";
-		  bot.target = targetPlayer.uuid;
+		if (bot.status !== 'Fleeing' && response == 'Flee') {
+			bot.jump();
+			bot.stopMining();
+			bot.status = 'Fleeing';
+			bot.target = targetPlayer.uuid;
+			bot.pathfind(targetPlayer.x, targetPlayer.y, 'Fight');
+		}
+	}
+	if (bot.status == 'Fighting' && bot.lifetimeInt % 3 == 0) {
+		let targetPlayer = undefined;
+		game.playerObjects.forEach(function(player) {
+			if (player.uuid == bot.target) {
+				targetPlayer = player;
+			}
+		});
+		if (targetPlayer !== undefined) {
+			if (bot.lifetimeInt % 5 == 0) {
+				bot.destination = { x: targetPlayer.x, y: targetPlayer.y };
+				bot.status = 'Travelling';
+			}
+			bot.mining = false;
+			if (Math.abs(targetPlayer.x - bot.x) <= 3) {
+				if (Math.abs(targetPlayer.y - bot.y) <= 3) {
+					bot.mining = true;
+				}
+			}
+		} else {
+			bot.status = 'Mining';
 		}
 	}
 };

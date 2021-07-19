@@ -146,7 +146,9 @@ const lootTable = {
 	'Tilled Rooted Grass': 'Dirt',
 	'Tilled Rooted Grass Left': 'Dirt',
 	'Tilled Rooted Grass Right': 'Dirt',
-	'Stone Bricks': 'Stone Bricks'
+	'Stone Bricks': 'Stone Bricks',
+	'Oak Leaves': {'item': 'Sticks', 'chance': 0.3, 'minCount': 1, 'maxCount': 2},
+	'Birch Leaves': {'item': 'Sticks', 'chance': 0.3, 'minCount': 1, 'maxCount': 2}
 };
 
 var blocks = {};

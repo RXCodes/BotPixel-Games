@@ -80,18 +80,19 @@ startMatch = function(world, uuid, players) {
 		crateLoot: world.crateLoot,
 		blockCost: world.blockCost,
 		declareWin: function(player) {
-		  this.winnerDeclared = true;
-		  this.playzoneSize = 1000;
-		  this.zoneActive = false;
-		  io.to(player.uuid).emit("Victory", "Last Player Standing!");
-		  io.to(this.uuid).emit("Declare Win", {
-		    uuid: player.uuid,
-		    name: player.name,
-		    endTime: (Date.now() / 1000) + 60
-		  })
-		  setTimeout(function() {
-		    endMatch(this.uuid);
-		  }, 60 * 1000)
+			let uuid = this.uuid;
+			this.winnerDeclared = true;
+			this.playzoneSize = 1000;
+			this.zoneActive = false;
+			io.to(player.uuid).emit('Victory', 'Last Player Standing!');
+			io.to(uuid).emit('Declare Win', {
+				uuid: player.uuid,
+				name: player.name,
+				endTime: Date.now() / 1000 + 60
+			});
+			setTimeout(function() {
+				endMatch(uuid);
+			}, 60 * 1000);
 		}
 	};
 
@@ -110,6 +111,7 @@ startMatch = function(world, uuid, players) {
 			xVelocity: 0,
 			yVelocity: 0,
 			time: Date.now(),
+			startingTime: Date.now(),
 			inventory: [],
 			health: 100,
 			healthRegenDelay: 100,
@@ -122,65 +124,92 @@ startMatch = function(world, uuid, players) {
 			playzoneDamageDelay: 0,
 			worldUUID: uuid,
 			physicDebuff: 0,
-			addToHealth: function(add, event, effect = 'None') {
-			  if (!games[this.worldUUID].winnerDeclared) {
-				this.health += add;
-				this.health = Math.max(this.health, 0);
-				this.health = Math.min(this.health, 100);
-				if (add < 0) {
-					this.healthRegenDelay = 100;
-					let worldUUID = this.worldUUID;
-					let uuid = this.uuid;
-					io.to(worldUUID).emit('Player Hit', {
-						effect,
-						uuid
-					});
-				}
-				if (this.type == 'Player') {
-					io.to(this.uuid).emit('Health Update', {
-						type: event.type || 'Regeneration',
-						change: add,
-						hp: this.health
-					});
-				}
-				if (this.health == 0) {
+			stats: {},
+			addToHealth: function(add, event = {}, effect = 'None') {
+				if (!games[this.worldUUID].winnerDeclared) {
+					this.health += add;
+					this.health = Math.max(this.health, 0);
+					this.health = Math.min(this.health, 100);
+					if (add < 0) {
+						this.healthRegenDelay = 100;
+						let worldUUID = this.worldUUID;
+						let uuid = this.uuid;
+						io.to(worldUUID).emit('Player Hit', {
+							effect,
+							uuid
+						});
+					}
 					if (this.type == 'Player') {
-						io.to(this.uuid).emit('death', Date.now() / 1000);
-					}
-
-					// player death
-					let worldUUID = this.worldUUID;
-					let x = this.x;
-					let y = this.y;
-					let uuid = this.uuid;
-					let name = this.name;
-					io.to(worldUUID).emit('death announce', {
-						playersLeft: games[worldUUID].playerObjects.length - 1,
-						cause: event,
-						uuid,
-						name
-					});
-					this.inventory.forEach(function(item) {
-						summonItem(
-							worldUUID,
-							x + Math.random(),
-							y + Math.random(),
-							item.name,
-							item.count
-						);
-					});
-					let checkIndex = 0;
-					games[worldUUID].playerObjects.forEach(function(player) {
-						if (uuid == player.uuid) {
-							games[worldUUID].playerObjects.splice(checkIndex, 1);
+						io.to(this.uuid).emit('Health Update', {
+							type: event.type || 'Regeneration',
+							change: add,
+							hp: this.health
+						});
+					} else {
+						if (event.type == 'Player') {
+							let player = referPlayer(this.worldUUID, event.uuid);
+							if (Math.abs(player.x - this.x) <= 5) {
+								if (Math.abs(player.y - this.y) <= 5) {
+									this.fightEnemy(event.uuid);
+								}
+							}
 						}
-						checkIndex++;
-					});
-					if (games[worldUUID].playerObjects.length == 1) {
-					  games[worldUUID].declareWin(games[worldUUID].playerObjects[0]);
+					}
+					if (this.health == 0) {
+						if (this.type == 'Player') {
+							this.stats.survivalDuration =
+								(Date.now() - this.startingTime) / 1000;
+							io.to(this.uuid).emit('death', {
+								timestamp: Date.now(),
+								stats: this.stats,
+								rank: games[this.worldUUID].playerObjects.length,
+								data: event
+							});
+						}
+						if (event.type == 'Player') {
+							referPlayer(this.worldUUID, event.uuid).stats.kills =
+								(referPlayer(this.worldUUID, event.uuid).stats.kills || 0) + 1;
+							kills = referPlayer(this.worldUUID, event.uuid).stats.kills;
+							io.to(event.uuid).emit('Kill', {
+								count: kills,
+								name: this.name,
+								cause: event.weapon
+							});
+						}
+
+						// player death
+						let worldUUID = this.worldUUID;
+						let x = this.x;
+						let y = this.y;
+						let uuid = this.uuid;
+						let name = this.name;
+						io.to(worldUUID).emit('death announce', {
+							playersLeft: games[worldUUID].playerObjects.length - 1,
+							cause: event,
+							uuid,
+							name
+						});
+						this.inventory.forEach(function(item) {
+							summonItem(
+								worldUUID,
+								x + Math.random(),
+								y + Math.random(),
+								item.name,
+								item.count
+							);
+						});
+						let checkIndex = 0;
+						games[worldUUID].playerObjects.forEach(function(player) {
+							if (uuid == player.uuid) {
+								games[worldUUID].playerObjects.splice(checkIndex, 1);
+							}
+							checkIndex++;
+						});
+						if (games[worldUUID].playerObjects.length == 1) {
+							games[worldUUID].declareWin(games[worldUUID].playerObjects[0]);
+						}
 					}
 				}
-			  }
 			},
 			itemCooldown: {},
 			setCooldown: function(alias, cooldown) {
@@ -216,7 +245,11 @@ startMatch = function(world, uuid, players) {
 							if (Math.abs(obj.y - y) <= yBound) {
 								// hit player
 								if (obj.uuid !== playerUUID && games[worldUUID].pvp) {
-									obj.addToHealth(-dmg, { uuid: obj.uuid, type: 'Player' });
+									obj.addToHealth(-dmg, {
+										uuid: playerUUID,
+										type: 'Player',
+										weapon: weapon
+									});
 								}
 							}
 						}
@@ -229,13 +262,15 @@ startMatch = function(world, uuid, players) {
 
 	// spawn players
 	let i = 0;
+	let playerCount = players.length;
 	let playerPositions = {};
 	let playerArray = shuffle(players);
 	playerArray.forEach(function(player) {
-		spawnPlayer((i - 5) * 10 + 5, 95, player.id, player.type, player.name);
+		let xPos = (i - playerCount / 2) * ((10 / playerCount) * 10) + 5;
+		spawnPlayer(xPos, 95, player.id, player.type, player.name);
 		if (player.type == 'Player') {
 			playerPositions[player.id] = {
-				x: (i - 5) * 10 + 5,
+				x: xPos,
 				y: 95
 			};
 		}
@@ -289,10 +324,10 @@ const runGame = function(game) {
 			object.isOnGroundDuration = 0;
 		}
 
-    object.physicDebuff--;
-    if (object.physicDebuff <= 0) {
-		object = physics.player(object, collisions);
-    }
+		object.physicDebuff--;
+		if (object.physicDebuff <= 0) {
+			object = physics.player(object, collisions);
+		}
 
 		// physical border check
 		object.x = Math.max(game.borderSize / -2, object.x);
@@ -523,7 +558,7 @@ const movePlayer = function(uuid, player, packet) {
 
 	games[uuid].playerObjects.forEach(function(object) {
 		if (object.uuid == player) {
-		  object.physicDebuff = 5;
+			object.physicDebuff = 5;
 			object.x = parseFloat(packet.xPos);
 			object.y = parseFloat(packet.yPos);
 			object.xVelocity = parseFloat(packet.xVelocity) / 11.5;
@@ -583,32 +618,48 @@ const destroyBlockEvent = function(x, y, playerUUID, worldUUID) {
 		blockData = blocksJSON[games[worldUUID].world[x + ',' + y]];
 		if (blockData !== undefined) {
 			if (blockData.drops !== undefined) {
-				let give = inventory.give(player.inventory, blockData.drops, 1);
-				player.inventory = give.inventory;
-				if (give.success == true) {
-					let type = 'Items/';
-					if (getBlock(blockData.drops).breakDuration) {
-						type = 'Blocks/';
+				const givePlayer = function(item, count) {
+					let give = inventory.give(player.inventory, item, count);
+					player.inventory = give.inventory;
+					if (give.success == true) {
+						let type = 'Items/';
+						if (getBlock(item).breakDuration) {
+							type = 'Blocks/';
+						}
+						io.to(worldUUID).emit('Pick Up Item', {
+							x,
+							y,
+							type,
+							item,
+							uuid: player.uuid
+						});
 					}
-					pushEvent(worldUUID, 'Pick Up Item', {
-						x,
-						y,
-						type,
-						item: blockData.drops,
-						uuid: player.uuid
-					});
+					if (give.leftOver > 0 && give.success) {
+						summonItem(worldUUID, player.x, player.y, item, give.leftOver);
+					}
+					if (!give.success) {
+						summonItem(worldUUID, x, y, item, give.leftOver);
+					}
+				};
+				let usingJSON = true;
+				try {
+					blockData.drops.item;
+				} catch(e) {
+					usingJSON = false;
 				}
-				if (give.leftOver > 0 && give.success) {
-					summonItem(
-						worldUUID,
-						player.x,
-						player.y,
-						blockData.drops,
-						give.leftOver
-					);
-				}
-				if (!give.success) {
-					summonItem(worldUUID, x, y, blockData.drops, give.leftOver);
+
+				if (usingJSON) {
+					let count =
+						blockData.drops.minCount +
+						Math.round(
+							Math.random() *
+								(blockData.drops.maxCount - blockData.drops.minCount)
+						);
+					if (Math.random() < blockData.drops.chance || 1) {
+						givePlayer(blockData.drops.item, parseInt(count));
+					}
+				} else {
+					givePlayer(blockData.drops, 1);
 				}
 			}
 		}
