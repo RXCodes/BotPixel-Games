@@ -164,4 +164,4 @@ exports.give = storeItem;
 exports.getBlocks = checkForBlocks;
 exports.clear = deleteSlot;
 exports.swap = swapSlots;
-exports.remove = remove;
+exports.remove = remove;  

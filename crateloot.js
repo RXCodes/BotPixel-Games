@@ -1,4 +1,10 @@
 const crateCapacity = 10;
+const blockDataScope = require('./blocks');
+blocksJSON = {};
+const setupBlocks = function() {
+  blocksJSON = blockDataScope.blocks();
+}
+
 function shuffle(array) {
 	var currentIndex = array.length,
 		randomIndex;
@@ -21,8 +27,8 @@ function shuffle(array) {
 
 const lootTable = {
 	'Oak Planks': {
-		rarity: 1,
-		rarityRange: 2,
+		rarity: 3,
+		rarityRange: 2.5,
 		minCount: 4,
 		maxCount: 20,
 		includes: { name: 'Sticks', chance: 0.95 }
@@ -35,8 +41,8 @@ const lootTable = {
 		includes: { name: 'Sticks', chance: 0.75 }
 	},
 		'Birch Planks': {
-		rarity: 1,
-		rarityRange: 2,
+		rarity: 3,
+		rarityRange: 2.5,
 		minCount: 4,
 		maxCount: 20,
 		includes: { name: 'Sticks', chance: 0.95 }
@@ -48,7 +54,7 @@ const lootTable = {
 		maxCount: 9,
 		includes: { name: 'Sticks', chance: 0.75 }
 	},
-	Sticks: { rarity: 1, rarityRange: 2, minCount: 1, maxCount: 6 },
+	Sticks: { rarity: 1, rarityRange: 3, minCount: 1, maxCount: 6 },
 	Bixbite: {
 		rarity: 9,
 		rarityRange: 2,
@@ -155,7 +161,16 @@ const generateLoot = function(rarity) {
 	});
 
 	// return data
+	Object.keys(loot).forEach(function(item) {
+	 // check if item is a block
+    if (blocksJSON[loot[item].name] !== undefined) {
+      loot[item].type = "Blocks/";
+    } else {
+      loot[item].type = "Items/";
+    }
+	});
 	return loot;
 };
 
 exports.generateLoot = generateLoot;
+exports.setup = setupBlocks;

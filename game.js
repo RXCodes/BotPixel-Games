@@ -14,6 +14,19 @@ const getBlock = function(block) {
 const setup = require('./setup');
 io = setup.io();
 
+// function that tells if a given string input is a JSON object or not
+const isDictionary = function(input) {
+	let error = false;
+	try {
+		let dict = JSON.parse(input);
+		dict.test = 123;
+	} catch {
+		error = true;
+	}
+	return !error;
+};
+
+// shuffle array randomly
 function shuffle(array) {
 	var currentIndex = array.length,
 		randomIndex;
@@ -125,6 +138,76 @@ startMatch = function(world, uuid, players) {
 			worldUUID: uuid,
 			physicDebuff: 0,
 			stats: {},
+			crateCollectItem: function(position, slot) {
+				if (
+					(games[this.worldUUID].crateLoot[position] || {})[slot] !== undefined
+				) {
+					let item = games[this.worldUUID].crateLoot[position][slot];
+					delete games[this.worldUUID].crateLoot[position][slot];
+					io.to(this.worldUUID).emit(
+						'Crate Update',
+						position,
+						games[this.worldUUID].crateLoot[position]
+					);
+					let give = inventory.give(this.inventory, item.name, item.count);
+					this.inventory = give.inventory;
+					io.to(this.uuid).emit('update inventory', this.inventory);
+					if (give.success) {
+						let type = 'Items/';
+						if (getBlock(item.name).breakDuration) {
+							type = 'Blocks/';
+						}
+						let coordinates = position.split(',');
+						io.to(this.worldUUID).emit('Pick Up Item', {
+							x: coordinates[0],
+							y: coordinates[1],
+							type,
+							item: item.name,
+							uuid: this.uuid
+						});
+					}
+					if (give.leftOver > 0) {
+						summonItem(
+							this.worldUUID,
+							this.x,
+							this.y,
+							item.name,
+							give.leftOver
+						);
+					}
+				}
+			},
+			crateStoreItem: function(position, crateSlot, inventorySlot) {
+				if (
+					(games[this.worldUUID].crateLoot[position] || {})[crateSlot] ==
+						undefined &&
+					this.inventory[inventorySlot] !== undefined
+				) {
+					let item = this.inventory[inventorySlot];
+					games[this.worldUUID].crateLoot[position][crateSlot] = this.inventory[
+						inventorySlot
+					];
+					this.inventory.splice(inventorySlot, 1);
+					io.to(this.uuid).emit('update inventory', this.inventory);
+					io.to(this.worldUUID).emit(
+						'Crate Update',
+						position,
+						games[this.worldUUID].crateLoot[position]
+					);
+				}
+			},
+			dropItem: function(slot) {
+				if (this.inventory[slot] !== undefined) {
+					summonItem(
+						this.worldUUID,
+						this.x,
+						this.y,
+						this.inventory[slot].name,
+						this.inventory[slot].count
+					);
+					this.inventory = inventory.clear(this.inventory, slot);
+				}
+			},
 			addToHealth: function(add, event = {}, effect = 'None') {
 				if (!games[this.worldUUID].winnerDeclared) {
 					this.health += add;
@@ -418,8 +501,9 @@ const runGame = function(game) {
 			let player = undefined;
 			game.playerObjects.forEach(function(object) {
 				if (
-					Math.abs(object.x - item.x) < 1.5 &&
-					Math.abs(object.y - item.y) < 1.5
+					Math.abs(object.x - item.x) < 1.65 &&
+					Math.abs(object.y - item.y) < 1.65 &&
+					item.lifetime > 1.5
 				) {
 					player = object;
 				}
@@ -641,11 +725,9 @@ const destroyBlockEvent = function(x, y, playerUUID, worldUUID) {
 						summonItem(worldUUID, x, y, item, give.leftOver);
 					}
 				};
-				let usingJSON = true;
-				try {
-					blockData.drops.item;
-				} catch(e) {
-					usingJSON = false;
+				let usingJSON = false;
+				if (blockData.drops.constructor == Object) {
+					usingJSON = true;
 				}
 
 				if (usingJSON) {
@@ -655,7 +737,7 @@ const destroyBlockEvent = function(x, y, playerUUID, worldUUID) {
 							Math.random() *
 								(blockData.drops.maxCount - blockData.drops.minCount)
 						);
-					if (Math.random() < blockData.drops.chance || 1) {
+					if (Math.random() < blockData.drops.chance) {
 						givePlayer(blockData.drops.item, parseInt(count));
 					}
 				} else {
@@ -717,6 +799,40 @@ const registerAnimation = function(room, uuid, input) {
 		referPlayer(room, uuid).mining = false;
 	}
 };
+
+// player actions
+io.on('connection', function(socket) {
+	socket.on('drop item', function(input, callback) {
+		if (socket.ingame) {
+			if (referPlayer(socket.room, socket.uuid) !== {}) {
+				referPlayer(socket.room, socket.uuid).dropItem(parseInt(input));
+			}
+		}
+	});
+	socket.on('Crate Deposit', function(input, callback) {
+		if (socket.ingame && isDictionary(input)) {
+			if (referPlayer(socket.room, socket.uuid) !== {}) {
+				let parsedInput = JSON.parse(input);
+				referPlayer(socket.room, socket.uuid).crateStoreItem(
+					parsedInput.position,
+					parseInt(parsedInput['target slot']),
+					parseInt(parsedInput['inventory slot'])
+				);
+			}
+		}
+	});
+	socket.on('Crate Collect', function(input, callback) {
+		if (socket.ingame && isDictionary(input)) {
+			let parsedInput = JSON.parse(input);
+			if (referPlayer(socket.room, socket.uuid) !== {}) {
+				referPlayer(socket.room, socket.uuid).crateCollectItem(
+					parsedInput.position,
+					parseInt(parsedInput['target slot'])
+				);
+			}
+		}
+	});
+});
 
 // send chunk updates to player
 const sendChunkUpdates = function(game) {

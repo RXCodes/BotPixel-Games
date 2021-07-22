@@ -9,6 +9,8 @@ const leaderboards = require('./leaderboard');
 const worldGen = require('./worldgen');
 const gameHandler = require('./game');
 const blockData = require('./blocks');
+const crateLoot = require('./crateloot');
+crateLoot.setup();
 
 // function that tells if a given string input is a JSON object or not
 const isDictionary = function(input) {
@@ -347,7 +349,7 @@ const matchmake = function() {
 						getSocket(id).ingame = true;
 						getSocket(id).matchmaking = false;
 					});
-					io.to(roomUUID).emit('open world', world.world, world.chunks);
+					io.to(roomUUID).emit('open world', world.world, world.chunks, world.crateLoot);
 					io.to(roomUUID).emit('loot', world.crateLoot);
 				}, 1000);
 			}

@@ -64,55 +64,47 @@ var iterate = function(bot, game) {
 			blockData = blocksJSON[game.world[x + ',' + y]];
 			if (blockData !== undefined) {
 				if (blockData.drops !== undefined) {
-				  const givePlayer = function(item, count) {
-					let give = inventory.give(bot.inventory, item, count);
-					bot.inventory = give.inventory;
-					if (give.success == true) {
-						let type = 'Items/';
-						if (getBlock(item).breakDuration) {
-							type = 'Blocks/';
+					const givePlayer = function(item, count) {
+						let give = inventory.give(bot.inventory, item, count);
+						bot.inventory = give.inventory;
+						if (give.success == true) {
+							let type = 'Items/';
+							if (getBlock(item).breakDuration) {
+								type = 'Blocks/';
+							}
+							world.emit(uuid, 'Pick Up Item', {
+								x,
+								y,
+								type,
+								item,
+								uuid: bot.uuid
+							});
 						}
-						world.emit(uuid, 'Pick Up Item', {
-							x,
-							y,
-							type,
-							item,
-							uuid: bot.uuid
-						});
+						if (give.leftOver > 0 && give.success) {
+							world.summonItem(uuid, bot.x, bot.y, item, give.leftOver);
+						}
+						if (!give.success) {
+							world.summonItem(uuid, x, y, item, give.leftOver);
+						}
+					};
+					let usingJSON = false;
+					if (blockData.drops.constructor == Object) {
+						usingJSON = true;
 					}
-					if (give.leftOver > 0 && give.success) {
-						world.summonItem(
-							uuid,
-							bot.x,
-							bot.y,
-							item,
-							give.leftOver
-						);
-					}
-					if (!give.success) {
-						world.summonItem(uuid, x, y, item, give.leftOver);
-					}
-				}
-				let usingJSON = true;
-				try {
-					blockData.drops.item;
-				} catch(e) {
-					usingJSON = false;
-				}
 
-				if (usingJSON) {
-					let count =
-						blockData.drops.minCount +
-						Math.round(
-							Math.random() *
-								(blockData.drops.maxCount - blockData.drops.minCount)
-						);
-					if (Math.random() < blockData.drops.chance || 1) {
-						givePlayer(blockData.drops.item, parseInt(count));
+					if (usingJSON) {
+						let count =
+							blockData.drops.minCount +
+							Math.round(
+								Math.random() *
+									(blockData.drops.maxCount - blockData.drops.minCount)
+							);
+						if (Math.random() < blockData.drops.chance) {
+							givePlayer(blockData.drops.item, parseInt(count));
+						}
+					} else {
+						givePlayer(blockData.drops, 1);
 					}
-				} else {
-					givePlayer(blockData.drops, 1);
-				}
 				}
 			}
 			world.destroyBlock(uuid, x, y);
@@ -389,12 +381,17 @@ var iterate = function(bot, game) {
 		}
 	}
 
-	// travel to destination, no pathfinding
-	if (bot.status == 'Travelling') {
+	// travel to destination function
+	const travel = function(type = 'Normal') {
+		let deltaType = {
+			Normal: 3,
+			Player: 1
+		};
+		let xDeltaThreshold = deltaType[type];
 		let xDelta = Math.abs(bot.destination.x - bot.x);
 
 		// horizontal movement
-		if (xDelta >= 3) {
+		if (xDelta >= xDeltaThreshold) {
 			let jumped = false;
 			if (bot.x < bot.destination.x) {
 				if (
@@ -435,13 +432,17 @@ var iterate = function(bot, game) {
 			}
 
 			// stack blocks under player if needed
-			if (!bot.checkCollision(0, -1) && !bot.checkCollision(0, 2)) {
+			if (
+				!bot.checkCollision(0, -1) &&
+				!bot.checkCollision(0, 2) &&
+				bot.y > bot.destination.y
+			) {
 				bot.placeBlock(0, -1);
 			}
 		}
 
 		// vertical movement
-		if (xDelta < 3) {
+		if (xDelta < xDeltaThreshold) {
 			bot.xVelocity = 0;
 			bot.horizontalMovement = 0;
 			if (bot.y - 0.5 < bot.destination.y) {
@@ -481,7 +482,7 @@ var iterate = function(bot, game) {
 			}
 
 			// attempt to jump over or cover hole
-			if (depth >= 4) {
+			if (depth >= 4 && bot.y < bot.destination.y) {
 				if (!bot.jump()) {
 					bot.placeBlock(xOff, -1);
 				}
@@ -517,6 +518,11 @@ var iterate = function(bot, game) {
 				bot.debugChat("can't reach there.");
 			}
 		}
+	};
+
+	// travel to destination, no pathfinding
+	if (bot.status == 'Travelling') {
+		travel();
 	}
 
 	// bot has arrived at destination while travelling
@@ -825,15 +831,19 @@ var iterate = function(bot, game) {
 		game.playerObjects.forEach(function(player) {
 			if (Math.abs(player.x - bot.x) <= viewRadius) {
 				if (Math.abs(player.y - bot.y) <= viewRadius) {
-					targetPlayer = player;
+					if (player.uuid !== bot.uuid) {
+						targetPlayer = player;
+					}
 				}
 			}
 		});
 		game.playerObjects.forEach(function(player) {
 			if (Math.abs(player.x - bot.x) <= combatRadius) {
 				if (Math.abs(player.y - bot.y) <= combatRadius) {
-					combatRadiusUsed = true;
-					targetPlayer = player;
+					if (player.uuid !== bot.uuid) {
+						combatRadiusUsed = true;
+						targetPlayer = player;
+					}
 				}
 			}
 		});
@@ -847,41 +857,99 @@ var iterate = function(bot, game) {
 			if (bot.y + 3 < targetPlayer.y && bot.health > 20) {
 				response = 'Fight';
 			}
-		}
-		if (response == 'Fight' && bot.status !== 'Fighting') {
-			bot.jump();
-			bot.stopMining();
-			bot.status = 'Fighting';
-			bot.target = targetPlayer.uuid;
-		}
-		if (bot.status !== 'Fleeing' && response == 'Flee') {
-			bot.jump();
-			bot.stopMining();
-			bot.status = 'Fleeing';
-			bot.target = targetPlayer.uuid;
-			bot.pathfind(targetPlayer.x, targetPlayer.y, 'Fight');
+			if (response == 'Fight' && bot.status !== 'Fighting') {
+				bot.jump();
+				bot.stopMining();
+				bot.status = 'Fighting';
+				bot.target = targetPlayer.uuid;
+			}
+			if (bot.status !== 'Fleeing' && response == 'Flee') {
+				bot.jump();
+				bot.stopMining();
+				bot.status = 'Fleeing';
+				bot.target = targetPlayer.uuid;
+				bot.pathfind(targetPlayer.x, targetPlayer.y, 'Fight');
+			}
 		}
 	}
-	if (bot.status == 'Fighting' && bot.lifetimeInt % 3 == 0) {
-		let targetPlayer = undefined;
-		game.playerObjects.forEach(function(player) {
-			if (player.uuid == bot.target) {
-				targetPlayer = player;
-			}
-		});
-		if (targetPlayer !== undefined) {
-			if (bot.lifetimeInt % 5 == 0) {
-				bot.destination = { x: targetPlayer.x, y: targetPlayer.y };
-				bot.status = 'Travelling';
-			}
+
+	// fight response
+	if (bot.status == 'Fighting') {
+		if (bot.lifetimeInt % 3 == 0) {
+			bot.targetPlayer = undefined;
+			game.playerObjects.forEach(function(player) {
+				if (player.uuid == bot.target) {
+					bot.targetPlayer = player;
+				}
+			});
+		}
+		if (bot.targetPlayer !== undefined) {
+			bot.destination = { x: bot.targetPlayer.x, y: bot.targetPlayer.y };
+			travel('Player');
 			bot.mining = false;
-			if (Math.abs(targetPlayer.x - bot.x) <= 3) {
-				if (Math.abs(targetPlayer.y - bot.y) <= 3) {
+			if (Math.abs(bot.targetPlayer.x - bot.x) <= 3) {
+				if (Math.abs(bot.targetPlayer.y - bot.y) <= 3) {
+					if (Math.abs(bot.targetPlayer.y - bot.y) <= 1) {
+						bot.jump();
+					}
 					bot.mining = true;
 				}
 			}
 		} else {
+			if (Math.random() < 0.5) {
+				bot.status = 'Mining';
+			} else {
+				bot.status = 'Idle';
+			}
+		}
+	}
+
+	// flight response
+	if (bot.status == 'Fleeing') {
+		if ((bot.lifetimeInt + 1) % 3 == 0) {
+			bot.targetPlayer = undefined;
+			game.playerObjects.forEach(function(player) {
+				if (player.uuid == bot.target) {
+					bot.targetPlayer = player;
+				}
+			});
+		}
+		if (bot.targetPlayer !== undefined) {
+			bot.destination = {
+				x: game.playzoneXOffset,
+				y: 70 + Math.random() * 20
+			};
+			travel();
+
+			// block enemy
+			if (Math.random() < 0.2) {
+				if (bot.xVelocity > 0 && bot.targetPlayer.x + 3 < bot.x) {
+					bot.placeBlock(-1, 0);
+					bot.placeBlock(-1, 1);
+				}
+				if (bot.xVelocity < 0 && bot.targetPlayer.x - 3 > bot.x) {
+					bot.placeBlock(1, 0);
+					bot.placeBlock(1, 1);
+				}
+			}
+		} else {
+			bot.jump();
 			bot.status = 'Mining';
+		}
+	}
+
+	// fight or flight resolve
+	if (bot.status == 'Fighting' || bot.status == 'Fleeing') {
+		if (bot.targetPlayer !== undefined) {
+			if (Math.abs(bot.targetPlayer.x - bot.x) >= 10) {
+				if (Math.abs(bot.targetPlayer.y - bot.y) >= 10) {
+					if (Math.random() < 0.5) {
+						bot.status = 'Idle';
+					} else {
+						bot.status = 'Mining';
+					}
+				}
+			}
 		}
 	}
 };
