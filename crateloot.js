@@ -2,8 +2,8 @@ const crateCapacity = 10;
 const blockDataScope = require('./blocks');
 blocksJSON = {};
 const setupBlocks = function() {
-  blocksJSON = blockDataScope.blocks();
-}
+	blocksJSON = blockDataScope.blocks();
+};
 
 function shuffle(array) {
 	var currentIndex = array.length,
@@ -40,7 +40,7 @@ const lootTable = {
 		maxCount: 9,
 		includes: { name: 'Sticks', chance: 0.75 }
 	},
-		'Birch Planks': {
+	'Birch Planks': {
 		rarity: 3,
 		rarityRange: 2.5,
 		minCount: 4,
@@ -54,7 +54,22 @@ const lootTable = {
 		maxCount: 9,
 		includes: { name: 'Sticks', chance: 0.75 }
 	},
-	Sticks: { rarity: 1, rarityRange: 3, minCount: 1, maxCount: 6 },
+	Apple: {
+		rarity: 3,
+		rarityRange: 1.5,
+		minCount: 1,
+		maxCount: 3,
+		includes: { name: 'Golden Apple', chance: 0.1 }
+	},
+	'Golden Apple': {
+		rarity: 100,
+		rarityRange: 1,
+		minCount: 1,
+		maxCount: 1
+	},
+	String: { rarity: 2, rarityRange: 3, minCount: 1, maxCount: 6 },
+	Sticks: { rarity: 3, rarityRange: 3, minCount: 1, maxCount: 6 },
+	TNT: { rarity: 8, rarityRange: 6, minCount: 1, maxCount: 10 },
 	Bixbite: {
 		rarity: 9,
 		rarityRange: 2,
@@ -80,16 +95,16 @@ const pickItem = function(rarity) {
 	let items = [];
 	Object.keys(lootTable).forEach(function(item) {
 		let object = lootTable[item];
-	  object.name = item;
-		if (rarity > object.rarity - object.rarityRange / 2) {
-			if (rarity < object.rarity + object.rarityRange / 2) {
+		object.name = item;
+		if (rarity > object.rarity - (object.rarityRange / 2)) {
+			if (rarity < object.rarity + (object.rarityRange / 2)) {
 				items.push(lootTable[item]);
 			}
 		}
 	});
 
 	// randomly select an item to put
-	let index = Math.floor(Math.random() * (items.length - 1));
+	let index = Math.round(Math.random() * (items.length - 1));
 	if (items[index]) {
 		let count = Math.round(
 			items[index].minCount +
@@ -162,12 +177,12 @@ const generateLoot = function(rarity) {
 
 	// return data
 	Object.keys(loot).forEach(function(item) {
-	 // check if item is a block
-    if (blocksJSON[loot[item].name] !== undefined) {
-      loot[item].type = "Blocks/";
-    } else {
-      loot[item].type = "Items/";
-    }
+		// check if item is a block
+		if (blocksJSON[loot[item].name] !== undefined) {
+			loot[item].type = 'Blocks/';
+		} else {
+			loot[item].type = 'Items/';
+		}
 	});
 	return loot;
 };

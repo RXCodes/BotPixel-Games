@@ -4,6 +4,7 @@ const physics = require('./physics');
 const blockDataScope = require('./blocks');
 const blockUpdate = require('./blockupdates');
 const inventory = require('./inventory');
+const entityBehavior = require('./entity');
 const maxItemLifetime = 30;
 const maxItemEntities = 50;
 const worldHeightLimit = 100;
@@ -13,6 +14,51 @@ const getBlock = function(block) {
 };
 const setup = require('./setup');
 io = setup.io();
+
+// entity constructor
+function summonEntity(type, x, y, worldUUID, parameters = {}) {
+	let object = { alive: true };
+	object.type = type;
+	object.x = x;
+	object.y = y;
+	object.id = generateUUID();
+	object.start = Date.now();
+	object.worldUUID = worldUUID;
+	Object.keys(parameters).forEach(function(key) {
+		object[key] = parameters[key];
+	});
+	object.waitQuene = {};
+
+	// entity function
+	object.wait = function(seconds, alias) {
+		if (object.waitQuene[alias] == undefined) {
+			object.waitQuene[alias] = Date.now();
+			return false;
+		} else {
+			if (Date.now() - object.waitQuene[alias] >= parseFloat(seconds) * 1000) {
+				delete object.waitQuene[alias];
+				return true;
+			}
+		}
+		return false;
+	};
+	object.explode = function(radius) {
+		games[worldUUID].explode(object.x, object.y, radius, object.parent);
+	};
+	object.setVelocity = function(x, y = '~') {
+		if (x !== '~') {
+			object.xVelocity = parseFloat(x) || 0;
+		}
+		if (y !== '~') {
+			object.yVelocity = parseFloat(y) || 0;
+		}
+	};
+	object.kill = function() {
+		object.alive = false;
+	};
+
+	return object;
+}
 
 // function that tells if a given string input is a JSON object or not
 const isDictionary = function(input) {
@@ -90,13 +136,91 @@ startMatch = function(world, uuid, players) {
 		playzoneXOffset: 0,
 		updateChunks: {},
 		itemEntities: [],
+		entities: [],
 		crateLoot: world.crateLoot,
 		blockCost: world.blockCost,
+		explode: function(x, y, radius, parent = 'None') {
+			let world = this.world;
+			io.to(this.uuid).emit('Explode', x, y, radius);
+
+			// summon tnt from explosion
+			const chainTNT = function(worldUUID, x, y, playerUUID) {
+				setTimeout(function() {
+					summonTNT(worldUUID, x, y, Math.random() + 0.3, playerUUID);
+				}, 10);
+			};
+
+			// repel entities
+			this.entities.forEach(function(entity) {
+				let distance = (entity.x - x) ** 2 + (entity.y - y) ** 2;
+				if (distance <= radius ** 2) {
+					let power = 2;
+					var angleDeg =
+						(Math.atan2(entity.x - x, entity.y - y) * 180) / Math.PI;
+					entity.xVelocity = Math.sin(angleDeg) * power;
+					entity.yVelocity = Math.cos(angleDeg) * power;
+				}
+			});
+
+			// damage players
+			this.playerObjects.forEach(function(player) {
+				let distance = (player.x - x) ** 2 + (player.y - y) ** 2;
+				if (distance <= radius ** 2) {
+					if (parent !== 'None') {
+						player.addToHealth(-50, {
+							type: 'Player',
+							uuid: parent,
+							name: referPlayer(this.uuid, parent).name,
+							weapon: 'TNT Explosion'
+						});
+					} else {
+						player.addToHealth(-50, {
+							type: 'Custom',
+							weapon: 'Explosion'
+						});
+					}
+				}
+			});
+
+			// destroy blocks
+			for (xOffset = -radius; xOffset <= radius; xOffset++) {
+				for (yOffset = -radius; yOffset <= radius; yOffset++) {
+					let distance = xOffset ** 2 + yOffset ** 2;
+					if (distance <= radius ** 2) {
+						let block =
+							world[
+								Math.round(parseInt(x) + xOffset) +
+									',' +
+									Math.round(parseInt(y) + yOffset)
+							];
+						if (block && block !== 'Bedrock') {
+							destroyBlock(
+								this.uuid,
+								Math.round(parseInt(x) + xOffset),
+								Math.round(parseInt(y) + yOffset),
+								'Explosion'
+							);
+						}
+						// summon tnt via explosion
+						if (block == 'TNT') {
+							chainTNT(
+								this.uuid,
+								Math.round(parseInt(x) + xOffset),
+								Math.round(parseInt(y) + yOffset),
+								parent
+							);
+						}
+					}
+				}
+			}
+		},
 		declareWin: function(player) {
 			let uuid = this.uuid;
 			this.winnerDeclared = true;
 			this.playzoneSize = 1000;
 			this.zoneActive = false;
+			this.pvp = false;
+			this.gameEnd = true;
 			io.to(player.uuid).emit('Victory', 'Last Player Standing!');
 			io.to(uuid).emit('Declare Win', {
 				uuid: player.uuid,
@@ -138,6 +262,26 @@ startMatch = function(world, uuid, players) {
 			worldUUID: uuid,
 			physicDebuff: 0,
 			stats: {},
+			alive: true,
+			igniteTNT: function(position) {
+				let coordinates = position.split(',');
+				if (games[this.worldUUID].world[position] == 'TNT') {
+					destroyBlock(
+						this.worldUUID,
+						parseInt(coordinates[0]),
+						parseInt(coordinates[1]),
+						'TNT Ignite'
+					);
+					io.to(this.worldUUID, 'Ignite TNT', coordinates[0], coordinates[1]);
+					summonTNT(
+						this.worldUUID,
+						coordinates[0],
+						coordinates[1],
+						5,
+						this.uuid
+					);
+				}
+			},
 			crateCollectItem: function(position, slot) {
 				if (
 					(games[this.worldUUID].crateLoot[position] || {})[slot] !== undefined
@@ -249,15 +393,18 @@ startMatch = function(world, uuid, players) {
 								data: event
 							});
 						}
-						if (event.type == 'Player') {
-							referPlayer(this.worldUUID, event.uuid).stats.kills =
-								(referPlayer(this.worldUUID, event.uuid).stats.kills || 0) + 1;
-							kills = referPlayer(this.worldUUID, event.uuid).stats.kills;
-							io.to(event.uuid).emit('Kill', {
-								count: kills,
-								name: this.name,
-								cause: event.weapon
-							});
+						if (event.type == 'Player' && event.uuid !== this.uuid) {
+							if (referPlayer(this.worldUUID, event.uuid) !== {}) {
+								referPlayer(this.worldUUID, event.uuid).stats.kills =
+									(referPlayer(this.worldUUID, event.uuid).stats.kills || 0) +
+									1;
+								kills = referPlayer(this.worldUUID, event.uuid).stats.kills;
+								io.to(event.uuid).emit('Kill', {
+									count: kills,
+									name: this.name,
+									cause: event.weapon
+								});
+							}
 						}
 
 						// player death
@@ -362,6 +509,18 @@ startMatch = function(world, uuid, players) {
 	return {
 		positions: playerPositions
 	};
+};
+
+// entity summon
+const summonTNT = function(uuid, x, y, fuse = 5, playerUUID) {
+	games[uuid].entities.push(
+		summonEntity('TNT', parseFloat(x), parseFloat(y), uuid, {
+			fuse,
+			xVelocity: (Math.random() - 0.5) / 3,
+			yVelocity: Math.random() / 3,
+			parent: playerUUID
+		})
+	);
 };
 
 // iterate through each game
@@ -470,7 +629,67 @@ const runGame = function(game) {
 	if (game.matchBegins < Date.now()) {
 		match(game);
 	}
+
+	// entities
+	let entityPacket = [];
+	let entityCache = [];
+	let maxGravity = -2.5;
+	game.entities.forEach(function(entity) {
+		// packets
+		let data = {
+			x: entity.x,
+			y: entity.y,
+			type: entity.type,
+			id: entity.id
+		};
+
+		// physical movement
+		entity.xVelocity = entity.xVelocity || 0;
+		entity.yVelocity = entity.yVelocity || 0;
+		entity.x += entity.xVelocity;
+		entity.y += entity.yVelocity;
+		entity.xVelocity /= 1.1;
+		entity.yVelocity -= 0.1;
+		entity.yVelocity = Math.max(entity.yVelocity, maxGravity);
+		let x = Math.round(entity.x);
+		let y = Math.round(entity.y);
+		if (!entity.passable) {
+			if (game.collisions[x + ',' + (y - 1)] && entity.yVelocity < 0) {
+				entity.y = y;
+				entity.yVelocity = 0;
+				entity.xVelocity /= 1.6;
+			}
+			if (game.collisions[x + ',' + (y + 1)] && entity.yVelocity > 0) {
+				entity.y = y;
+				entity.yVelocity = 0;
+				entity.xVelocity /= 2;
+			}
+			if (game.collisions[x - 1 + ',' + y] && entity.xVelocity < 0) {
+				entity.x = x;
+				entity.xVelocity = 0;
+			}
+			if (game.collisions[x + 1 + ',' + y] && entity.xVelocity > 0) {
+				entity.x = x;
+				entity.xVelocity = 0;
+			}
+		}
+
+		if (entity.alive == true) {
+			entityPacket.push(data);
+
+			// entity behaviors
+			entity = (entityBehavior[entity.type] ||
+				function(e) {
+					return e;
+				})(entity, game.collisions, game.world);
+			entityCache.push(entity);
+		} else {
+			io.to(game.uuid).emit('Destroy Entity', entity.id);
+		}
+	});
 	io.to(game.uuid).emit('Player Move', playerMovePacket);
+	io.to(game.uuid).emit('Entity Move', entityPacket);
+	game.entities = entityCache;
 
 	// item drops
 	game.itemEntities.forEach(function(item) {
@@ -586,7 +805,7 @@ const updateChunk = function(worldUUID, x, y, chunkSize = 5) {
 // destroy a block at a given position
 const destroyBlock = function(worldUUID, x, y, uuid = 'bot') {
 	let position = x + ',' + y;
-	pushEvent(worldUUID, 'Destroy Block', {
+	io.to(worldUUID).emit('Destroy Block', {
 		x,
 		y,
 		block: games[worldUUID].world[position],
@@ -661,7 +880,7 @@ const summonItem = function(uuid, x, y, item, count) {
 		type = 'Items/';
 	}
 	let itemData = {
-		x: x + Math.random() * 0.3,
+		x: x + (Math.random() - 0.5) * 0.3,
 		y,
 		item,
 		count,
@@ -804,14 +1023,14 @@ const registerAnimation = function(room, uuid, input) {
 io.on('connection', function(socket) {
 	socket.on('drop item', function(input, callback) {
 		if (socket.ingame) {
-			if (referPlayer(socket.room, socket.uuid) !== {}) {
+			if (referPlayer(socket.room, socket.uuid).alive) {
 				referPlayer(socket.room, socket.uuid).dropItem(parseInt(input));
 			}
 		}
 	});
 	socket.on('Crate Deposit', function(input, callback) {
 		if (socket.ingame && isDictionary(input)) {
-			if (referPlayer(socket.room, socket.uuid) !== {}) {
+			if (referPlayer(socket.room, socket.uuid).alive) {
 				let parsedInput = JSON.parse(input);
 				referPlayer(socket.room, socket.uuid).crateStoreItem(
 					parsedInput.position,
@@ -824,11 +1043,18 @@ io.on('connection', function(socket) {
 	socket.on('Crate Collect', function(input, callback) {
 		if (socket.ingame && isDictionary(input)) {
 			let parsedInput = JSON.parse(input);
-			if (referPlayer(socket.room, socket.uuid) !== {}) {
+			if (referPlayer(socket.room, socket.uuid).alive) {
 				referPlayer(socket.room, socket.uuid).crateCollectItem(
 					parsedInput.position,
 					parseInt(parsedInput['target slot'])
 				);
+			}
+		}
+	});
+	socket.on('TNT Ignite', function(input, callback) {
+		if (socket.ingame) {
+			if (referPlayer(socket.room, socket.uuid).alive) {
+				referPlayer(socket.room, socket.uuid).igniteTNT(input);
 			}
 		}
 	});
@@ -973,21 +1199,76 @@ const match = function(game) {
 		game.gracePeriod = Date.now() + 30 * 1000;
 		pushEvent(game.uuid, 'Grace Period', game.gracePeriod / 1000);
 	} else {
-		if (game.gracePeriod < Date.now() && !game.pvp) {
+		if (game.gracePeriod < Date.now() && !game.pvp && !game.gameEnd) {
 			pushEvent(game.uuid, 'Grace Period End', {});
 			game.zoneIteration = 1;
 			game.timer = setTimeout(function() {
 				nextZone();
 			}, 8 * 1000);
+			game.currentDisasterEvents = {};
 			game.pvp = true;
 		}
+	}
+
+	// random disaster event
+	const disasterEvent = function(difficulty) {
+		let events = ['Meteor Shower'];
+		if (Math.random() < difficulty) {
+			// randomly pick event
+			let index = Math.floor(Math.random() * (events.length - 1));
+			let event = events[index];
+			if (game.currentDisasterEvents[event] == undefined) {
+				let eventData = {
+					event: event,
+					start: Date.now() + 35 * 1000,
+					end: Date.now() + 55 * 1000,
+					triggered: false
+				};
+				game.currentDisasterEvents[event] = eventData;
+				io.to(game.uuid).emit('Custom Event Warning', eventData);
+			}
+		}
+	};
+
+	// disaster function
+	if (game.pvp) {
+		Object.keys(game.currentDisasterEvents).forEach(function(event) {
+			let eventData = game.currentDisasterEvents[event];
+			if (!eventData.triggered && eventData.start <= Date.now()) {
+				eventData.triggered = true;
+				io.to(game.uuid).emit('Custom Event Start', eventData);
+			}
+			if (eventData.end <= Date.now()) {
+				delete game.currentDisasterEvents[event];
+			}
+			if (eventData.triggered) {
+				// meteor shower event
+				if (eventData.event == 'Meteor Shower') {
+					if (Math.random() < 0.2) {
+						game.entities.push(
+							summonEntity(
+								'Meteor',
+								(Math.random() - 0.5) * 37.5,
+								150,
+								game.uuid,
+								{
+									xVelocity: (Math.random() - 0.5) * 2.5,
+									yVelocity: -3,
+									passable: true
+								}
+							)
+						);
+					}
+				}
+			}
+		});
 	}
 
 	// playzone shrinking
 	if (game.zoneActive && game.nextZone < Date.now()) {
 		if (!game.zoneClosing) {
 			game.zoneClosing = true;
-			pushEvent(game.uuid, 'Playzone Shrink', {
+			io.to(game.uuid).emit('Playzone Shrink', {
 				'next zone': game.nextZone / 1000,
 				'target size': game.targetSize,
 				'zone x': game.targetZoneX,
@@ -1010,6 +1291,11 @@ const match = function(game) {
 			game.zoneClosing = false;
 			game.zoneIteration++;
 			nextZone();
+			if (game.zoneIteration >= 2) {
+				setTimeout(function() {
+					disasterEvent(0.5);
+				}, 15 * 1000);
+			}
 		} else if (game.zoneIteration == 8) {
 			game.zoneActive = false;
 		}

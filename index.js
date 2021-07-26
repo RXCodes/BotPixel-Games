@@ -151,6 +151,7 @@ io.on('connection', function(socket) {
 			}
 			let inv = gameHandler.updateInventory(socket.room, socket.uuid);
 			io.to(socket.id).emit('update inventory', JSON.stringify(inv));
+			callback(parsedPacket.x + "," + parsedPacket.y);
 		}
 	});
 	socket.on('place block', function(packet, callback) {
@@ -165,6 +166,7 @@ io.on('connection', function(socket) {
 					socket.room
 				);
 			}
+			callback(parsedPacket.x + "," + parsedPacket.y);
 		}
 	});
 	socket.on('animation', function(packet, callback) {
@@ -217,8 +219,8 @@ io.on('connection', function(socket) {
 				queneCapacity[parsedPacket.mode] = parseInt(parsedPacket.capacity || 10);
 
 				// random chance to have bots
-				if (Math.random() < 0.4) {
-					let clones = 2 + Math.round(Math.random() * 5);
+				if (Math.random() < 0.3) {
+					let clones = 1 + Math.round(Math.random() * 3);
 					for (i = 0; i < clones; i++) {
 						quene[parsedPacket['mode']][generateUUID()] = {
 							type: 'Bot',
@@ -302,7 +304,7 @@ const matchmake = function() {
 		}
 
 		// if quene has players in it, randomly add bots
-		let repeat = Math.round(queneCapacity[key] / 10) + 1;
+		let repeat = Math.max(Math.round(queneCapacity[key] / 10), 1);
 		for (i = 0; i < repeat; i++) {
 		if (
 			Object.keys(quene[key] || {}).length >= 1 &&

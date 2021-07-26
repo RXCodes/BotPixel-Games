@@ -13,7 +13,8 @@ const interestPriority = {
   'Deep Glowing Amber': 6,
   'Glowing Amber': 6,
   'Deep Bixbite Ore': 9,
-  'Bixbite Ore': 9
+  'Bixbite Ore': 9,
+  'TNT': 10
 }
 const blockBreakingTime = {
 	Bedrock: 9999,
@@ -60,7 +61,8 @@ const blockBreakingTime = {
 	'Wood Crate': 2,
 	'Iron Crate': 2.5,
 	'Gold Crate': 3,
-	'Stone Bricks': 2.8
+	'Stone Bricks': 2.8,
+	'TNT': 0.5
 };
 
 const blockBreakSoundFX = {
@@ -108,7 +110,8 @@ const blockBreakSoundFX = {
 	'Wood Crate': 'Wood',
 	'Iron Crate': 'Stone Fossil',
 	'Gold Crate': 'Amber',
-	'Stone Bricks': 'Stone Fossil'
+	'Stone Bricks': 'Stone Fossil',
+	'TNT': 'TNT'
 };
 const lootTable = {
 	Basalt: 'Basalt',
@@ -148,7 +151,8 @@ const lootTable = {
 	'Tilled Rooted Grass Right': 'Dirt',
 	'Stone Bricks': 'Stone Bricks',
 	'Oak Leaves': {'item': 'Sticks', 'chance': 0.2, 'minCount': 1, 'maxCount': 2},
-	'Birch Leaves': {'item': 'Sticks', 'chance': 0.2, 'minCount': 1, 'maxCount': 2}
+	'Birch Leaves': {'item': 'Sticks', 'chance': 0.2, 'minCount': 1, 'maxCount': 2},
+	'TNT': 'TNT'
 };
 
 var blocks = {};

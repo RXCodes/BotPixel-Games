@@ -13,6 +13,14 @@ const distance = function(x, y, x2, y2) {
 	yDelta = (y2 - y) * (y2 - y);
 	return Math.sqrt(xDelta + yDelta);
 };
+const inRange = function(x, y, x2, y2, range) {
+  xDelta = (x2 - x) ** 2;
+	yDelta = (y2 - y) ** 2;
+	if (xDelta + yDelta <= range ** 2) {
+	  return true;
+	}
+	return false;
+}
 const setup = require('./setup');
 io = setup.io();
 
@@ -161,7 +169,7 @@ var iterate = function(bot, game) {
 				let useSlot = place.solidBlockSlots[0];
 				let newX = bot.getPos(x, y).x;
 				let newY = bot.getPos(x, y).y;
-				if (game.world[x + ',' + 'y'] == undefined) {
+				if (game.world[newX + ',' + newY] == undefined) {
 					world.placeBlock(uuid, newX, newY, bot.inventory[useSlot].name);
 					let type = 'Items/';
 					if (getBlock(blockData.drops).breakDuration) {
@@ -309,7 +317,8 @@ var iterate = function(bot, game) {
 						y = object.y;
 					}
 				});
-				bot.pathfind(x, y);
+				bot.status = "Travelling";
+				bot.destination = {x, y};
 				delete game.interests[x + ',' + y];
 			}
 		};
@@ -671,8 +680,7 @@ var iterate = function(bot, game) {
 
 			// check if bot can reach the block
 			if (
-				distance(bot.x, bot.y, bot.targetX, bot.targetY) > reach &&
-				bot.mineDuration % 2 == 0
+				inRange(bot.x, bot.y, bot.targetX, bot.targetY, reach) !== true
 			) {
 				cancelMine();
 				return;
