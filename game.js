@@ -8,6 +8,12 @@ const entityBehavior = require('./entity');
 const maxItemLifetime = 30;
 const maxItemEntities = 50;
 const worldHeightLimit = 100;
+const food = require('./food');
+var foodJSON = {};
+const initializeScript = function() {
+	foodJSON = food.foodJSON();
+};
+exports.initialize = initializeScript;
 blocksJSON = {};
 const getBlock = function(block) {
 	return blocksJSON[block] || {};
@@ -263,6 +269,42 @@ startMatch = function(world, uuid, players) {
 			physicDebuff: 0,
 			stats: {},
 			alive: true,
+			eating: false,
+			eatTimer: undefined,
+			startEat: function(slot) {
+				if (this.inventory[slot] && slot >= 0) {
+					if (foodJSON[this.inventory[slot].name] !== undefined) {
+						io.to(this.worldUUID).emit('Start Eat', {
+							uuid: this.uuid,
+							item: this.inventory[slot]
+						});
+						this.eating = this.inventory[slot].name;
+						this.eatingSlot = slot;
+						let item = this.inventory[slot].name;
+						let player = this;
+						this.eatTimer = setTimeout(function() {
+							io.to(player.worldUUID).emit('Stop Eat', player.uuid);
+							player.addToHealth(foodJSON[player.eating].heal, {
+								type: 'Heal'
+							});
+							player.eating = false;
+							player.inventory = inventory.remove(
+								player.inventory,
+								player.eatingSlot,
+								1
+							).inventory;
+							io.to(player.uuid).emit('update inventory', player.inventory);
+						}, foodJSON[item].eatDuration * 1000);
+					}
+				}
+			},
+			cancelEat: function(slot) {
+				if (this.eating) {
+					this.eating = false;
+					clearTimeout(this.eatTimer);
+					io.to(this.worldUUID).emit('Stop Eat', this.uuid);
+				}
+			},
 			igniteTNT: function(position) {
 				let coordinates = position.split(',');
 				if (games[this.worldUUID].world[position] == 'TNT') {
@@ -648,7 +690,9 @@ const runGame = function(game) {
 		entity.yVelocity = entity.yVelocity || 0;
 		entity.x += entity.xVelocity;
 		entity.y += entity.yVelocity;
-		entity.xVelocity /= 1.1;
+		if (!entity.ignoreAirResistance) {
+			entity.xVelocity /= 1.1;
+		}
 		entity.yVelocity -= 0.1;
 		entity.yVelocity = Math.max(entity.yVelocity, maxGravity);
 		let x = Math.round(entity.x);
@@ -861,7 +905,7 @@ const movePlayer = function(uuid, player, packet) {
 
 	games[uuid].playerObjects.forEach(function(object) {
 		if (object.uuid == player) {
-			object.physicDebuff = 5;
+			object.physicDebuff = 10;
 			object.x = parseFloat(packet.xPos);
 			object.y = parseFloat(packet.yPos);
 			object.xVelocity = parseFloat(packet.xVelocity) / 11.5;
@@ -1017,6 +1061,9 @@ const registerAnimation = function(room, uuid, input) {
 	if (input == 'stop mine animation') {
 		referPlayer(room, uuid).mining = false;
 	}
+	if (referPlayer(room, uuid).alive) {
+		referPlayer(room, uuid).cancelEat();
+	}
 };
 
 // player actions
@@ -1055,6 +1102,20 @@ io.on('connection', function(socket) {
 		if (socket.ingame) {
 			if (referPlayer(socket.room, socket.uuid).alive) {
 				referPlayer(socket.room, socket.uuid).igniteTNT(input);
+			}
+		}
+	});
+	socket.on('Eat', function(input, callback) {
+		if (socket.ingame) {
+			if (referPlayer(socket.room, socket.uuid).alive) {
+				referPlayer(socket.room, socket.uuid).startEat(parseInt(input));
+			}
+		}
+	});
+	socket.on('Cancel Eat', function(input, callback) {
+		if (socket.ingame) {
+			if (referPlayer(socket.room, socket.uuid).alive) {
+				referPlayer(socket.room, socket.uuid).cancelEat();
 			}
 		}
 	});
@@ -1252,9 +1313,10 @@ const match = function(game) {
 								150,
 								game.uuid,
 								{
-									xVelocity: (Math.random() - 0.5) * 2.5,
+									xVelocity: (Math.random() - 0.5) * 1.5,
 									yVelocity: -3,
-									passable: true
+									passable: true,
+									ignoreAirResistance: true
 								}
 							)
 						);

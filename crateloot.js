@@ -61,6 +61,18 @@ const lootTable = {
 		maxCount: 3,
 		includes: { name: 'Golden Apple', chance: 0.1 }
 	},
+	Croissant: {
+		rarity: 3,
+		rarityRange: 2.5,
+		minCount: 1,
+		maxCount: 4
+	},
+	Sandwich: {
+		rarity: 7.5,
+		rarityRange: 1.5,
+		minCount: 1,
+		maxCount: 2
+	},
 	'Golden Apple': {
 		rarity: 100,
 		rarityRange: 1,
@@ -69,7 +81,7 @@ const lootTable = {
 	},
 	String: { rarity: 2, rarityRange: 3, minCount: 1, maxCount: 6 },
 	Sticks: { rarity: 3, rarityRange: 3, minCount: 1, maxCount: 6 },
-	TNT: { rarity: 8, rarityRange: 6, minCount: 1, maxCount: 10 },
+	TNT: { rarity: 8, rarityRange: 3.5, minCount: 1, maxCount: 4 },
 	Bixbite: {
 		rarity: 9,
 		rarityRange: 2,
@@ -121,6 +133,7 @@ const generateLoot = function(rarity) {
 	// rarity value range
 	rarity = Math.max(rarity, 1);
 	rarity = Math.min(rarity, 10);
+	rarity += Math.random() - 0.5;
 
 	// generate indexes for crate
 	let indexes = [];

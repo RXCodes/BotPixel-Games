@@ -1,3 +1,4 @@
+const secret = process.env['Password'];
 // -- This is where you tell the server what to do! -- \\
 
 // load necessary modules to start a socket.io server
@@ -10,7 +11,10 @@ const worldGen = require('./worldgen');
 const gameHandler = require('./game');
 const blockData = require('./blocks');
 const crateLoot = require('./crateloot');
+const food = require('./food');
+const foodJSON = food.foodJSON();
 crateLoot.setup();
+gameHandler.initialize();
 
 // function that tells if a given string input is a JSON object or not
 const isDictionary = function(input) {
@@ -64,6 +68,12 @@ io.on('connection', function(socket) {
 	socket.ingame = false;
 	socket.name = 'Guest';
 
+	socket.on('verify', function(input, callback) {
+		if (input == secret) {
+			socket.secure = true;
+		}
+	});
+
 	socket.on('change name', function(input, callback) {
 		if (input.length >= 3 && input.length <= 20) {
 			socket.name = input;
@@ -114,7 +124,7 @@ io.on('connection', function(socket) {
 	});
 
 	socket.on('generate world', function(packet, callback) {
-		if (isDictionary(packet)) {
+		if (isDictionary(packet) && socket.secure) {
 			let parsedPacket = JSON.parse(packet);
 			if (parsedPacket.type == 'chunks') {
 				let world = worldGen.generateWorld(parsedPacket.chunkSize);
@@ -151,7 +161,7 @@ io.on('connection', function(socket) {
 			}
 			let inv = gameHandler.updateInventory(socket.room, socket.uuid);
 			io.to(socket.id).emit('update inventory', JSON.stringify(inv));
-			callback(parsedPacket.x + "," + parsedPacket.y);
+			callback(parsedPacket.x + ',' + parsedPacket.y);
 		}
 	});
 	socket.on('place block', function(packet, callback) {
@@ -166,7 +176,7 @@ io.on('connection', function(socket) {
 					socket.room
 				);
 			}
-			callback(parsedPacket.x + "," + parsedPacket.y);
+			callback(parsedPacket.x + ',' + parsedPacket.y);
 		}
 	});
 	socket.on('animation', function(packet, callback) {
@@ -208,52 +218,61 @@ io.on('connection', function(socket) {
 		callback(blockData.get());
 	});
 
+	// fetch food data
+	socket.on('get food data', function(packet, callback) {
+		callback(foodJSON);
+	});
+
 	// initiating matchmaking
 	socket.on('matchmake', function(packet, callback) {
-		let matchmake = function() {
-			let parsedPacket = JSON.parse(packet);
-			socket.matchmaking = true;
-			quene[parsedPacket.mode] = quene[parsedPacket.mode] || {};
-			if (Object.keys(quene[parsedPacket.mode]).length == 0) {
-				queneCurrent[parsedPacket.mode] = generateUUID();
-				queneCapacity[parsedPacket.mode] = parseInt(parsedPacket.capacity || 10);
+		if (socket.secure) {
+			let matchmake = function() {
+				let parsedPacket = JSON.parse(packet);
+				socket.matchmaking = true;
+				quene[parsedPacket.mode] = quene[parsedPacket.mode] || {};
+				if (Object.keys(quene[parsedPacket.mode]).length == 0) {
+					queneCurrent[parsedPacket.mode] = generateUUID();
+					queneCapacity[parsedPacket.mode] = parseInt(
+						parsedPacket.capacity || 10
+					);
 
-				// random chance to have bots
-				if (Math.random() < 0.3) {
-					let clones = 1 + Math.round(Math.random() * 3);
-					for (i = 0; i < clones; i++) {
-						quene[parsedPacket['mode']][generateUUID()] = {
-							type: 'Bot',
-							uuid: generateUUID(),
-							name: generateBotName()
-						};
+					// random chance to have bots
+					if (Math.random() < 0.3) {
+						let clones = 1 + Math.round(Math.random() * 3);
+						for (i = 0; i < clones; i++) {
+							quene[parsedPacket['mode']][generateUUID()] = {
+								type: 'Bot',
+								uuid: generateUUID(),
+								name: generateBotName()
+							};
+						}
 					}
 				}
-			}
-			socket.join(queneCurrent[parsedPacket['mode']]);
-			socket.room = queneCurrent[parsedPacket['mode']];
-			socket.matchmakingMode = parsedPacket['mode'];
-			quene[parsedPacket['mode']][socket.id] = {
-				uuid: socket.uuid,
-				type: 'Player',
-				id: socket.id,
-				name: socket.name
+				socket.join(queneCurrent[parsedPacket['mode']]);
+				socket.room = queneCurrent[parsedPacket['mode']];
+				socket.matchmakingMode = parsedPacket['mode'];
+				quene[parsedPacket['mode']][socket.id] = {
+					uuid: socket.uuid,
+					type: 'Player',
+					id: socket.id,
+					name: socket.name
+				};
+				callback({
+					players: Object.keys(quene[parsedPacket['mode']]).length,
+					quene: Object.keys(quene[parsedPacket['mode']]),
+					id: queneCurrent[parsedPacket['mode']],
+					capacity: queneCapacity[parsedPacket['mode']] || 10
+				});
+				io.to(queneCurrent[parsedPacket['mode']]).emit(
+					'update count',
+					Object.keys(quene[parsedPacket['mode']]).length
+				);
 			};
-			callback({
-				players: Object.keys(quene[parsedPacket['mode']]).length,
-				quene: Object.keys(quene[parsedPacket['mode']]),
-				id: queneCurrent[parsedPacket['mode']],
-				capacity: queneCapacity[parsedPacket['mode']] || 10
-			});
-			io.to(queneCurrent[parsedPacket['mode']]).emit(
-				'update count',
-				Object.keys(quene[parsedPacket['mode']]).length
-			);
-		};
-		if (isDictionary(packet) && !socket.matchmaking && !socket.ingame) {
-			let parsedPacket = JSON.parse(packet);
-			if (checkPacket(parsedPacket, ['mode', 'map'])) {
-				matchmake();
+			if (isDictionary(packet) && !socket.matchmaking && !socket.ingame) {
+				let parsedPacket = JSON.parse(packet);
+				if (checkPacket(parsedPacket, ['mode', 'map'])) {
+					matchmake();
+				}
 			}
 		}
 	});
@@ -306,22 +325,22 @@ const matchmake = function() {
 		// if quene has players in it, randomly add bots
 		let repeat = Math.max(Math.round(queneCapacity[key] / 10), 1);
 		for (i = 0; i < repeat; i++) {
-		if (
-			Object.keys(quene[key] || {}).length >= 1 &&
-			Object.keys(quene[key] || {}).length < queneCapacity[key]
-		) {
-			if (Math.random() < 0.15) {
-				quene[key][generateUUID()] = {
-					type: 'Bot',
-					uuid: generateUUID(),
-					name: generateBotName()
-				};
-				io.to(queneCurrent[key]).emit(
-					'update count',
-					Object.keys(quene[key] || {}).length
-				);
+			if (
+				Object.keys(quene[key] || {}).length >= 1 &&
+				Object.keys(quene[key] || {}).length < queneCapacity[key]
+			) {
+				if (Math.random() < 0.15) {
+					quene[key][generateUUID()] = {
+						type: 'Bot',
+						uuid: generateUUID(),
+						name: generateBotName()
+					};
+					io.to(queneCurrent[key]).emit(
+						'update count',
+						Object.keys(quene[key] || {}).length
+					);
+				}
 			}
-		}
 		}
 
 		// if quene is full, start match shortly
@@ -351,7 +370,12 @@ const matchmake = function() {
 						getSocket(id).ingame = true;
 						getSocket(id).matchmaking = false;
 					});
-					io.to(roomUUID).emit('open world', world.world, world.chunks, world.crateLoot);
+					io.to(roomUUID).emit(
+						'open world',
+						world.world,
+						world.chunks,
+						world.crateLoot
+					);
 					io.to(roomUUID).emit('loot', world.crateLoot);
 				}, 1000);
 			}

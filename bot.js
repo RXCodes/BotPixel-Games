@@ -2,6 +2,8 @@ world = require('./game');
 const blockDataScope = require('./blocks');
 const inventory = require('./inventory');
 const pathfind = require('./pathfind');
+const food = require('./food');
+const foodJSON = food.foodJSON();
 blocksJSON = {};
 const reach = 5; // radius
 const woodBlocks = ['Oak Log', 'Birch Log'];
@@ -14,13 +16,13 @@ const distance = function(x, y, x2, y2) {
 	return Math.sqrt(xDelta + yDelta);
 };
 const inRange = function(x, y, x2, y2, range) {
-  xDelta = (x2 - x) ** 2;
+	xDelta = (x2 - x) ** 2;
 	yDelta = (y2 - y) ** 2;
 	if (xDelta + yDelta <= range ** 2) {
-	  return true;
+		return true;
 	}
 	return false;
-}
+};
 const setup = require('./setup');
 io = setup.io();
 
@@ -317,8 +319,8 @@ var iterate = function(bot, game) {
 						y = object.y;
 					}
 				});
-				bot.status = "Travelling";
-				bot.destination = {x, y};
+				bot.status = 'Travelling';
+				bot.destination = { x, y };
 				delete game.interests[x + ',' + y];
 			}
 		};
@@ -679,9 +681,7 @@ var iterate = function(bot, game) {
 			}
 
 			// check if bot can reach the block
-			if (
-				inRange(bot.x, bot.y, bot.targetX, bot.targetY, reach) !== true
-			) {
+			if (inRange(bot.x, bot.y, bot.targetX, bot.targetY, reach) !== true) {
 				cancelMine();
 				return;
 			}
@@ -764,9 +764,49 @@ var iterate = function(bot, game) {
 		bot.xVelocity = 0;
 		bot.horizontalMovement = 0;
 		bot.lootTime--;
+		bot.finishLooting = false;
+		if (bot.lifetimeInt % 5 == 0) {
+			// retrieve crate data
+			let crateData = game.crateLoot[bot.crateX + ',' + bot.crateY];
+			let itemsToTake = [];
+			Object.keys(crateData).forEach(function(slot) {
+				// slot data
+				let slotData = crateData[slot];
+
+				// always take food
+				if (foodJSON[slotData.name]) {
+					itemsToTake.push(slot);
+				}
+
+				// take blocks if needed
+				if ((blocksJSON[slotData.name] || {}).breakDuration) {
+					let block = inventory.getBlocks(bot.inventory);
+					if (block.totalSolidBlocks <= 99) {
+						itemsToTake.push(slot);
+					}
+				}
+				
+				// take desired valuables
+				if ((blocksJSON[slotData.name] || {}).priority) {
+				  for (i = 0; i < Math.ceil(blocksJSON[slotData.name].priority); i++) {
+				    itemsToTake.push(slot);
+				  }
+				}
+				
+			});
+
+			// pick random item
+			if (itemsToTake.length == 0) {
+				bot.finishLooting = true;
+			} else {
+				let index = Math.round(Math.random() * (itemsToTake.length - 1));
+				bot.crateCollectItem(bot.crateX + ',' + bot.crateY, itemsToTake[index]);
+			}
+		}
 		if (
 			game.crateLoot[bot.crateX + ',' + bot.crateY] == {} ||
-			bot.lootTime <= 0
+			bot.lootTime <= 0 ||
+			bot.finishLooting
 		) {
 			bot.debugChat('done looting crate.');
 			bot.status = 'Idle';
@@ -930,7 +970,7 @@ var iterate = function(bot, game) {
 			travel();
 
 			// block enemy
-			if (Math.random() < 0.2) {
+			if (Math.random() < 0.4) {
 				if (bot.xVelocity > 0 && bot.targetPlayer.x + 3 < bot.x) {
 					bot.placeBlock(-1, 0);
 					bot.placeBlock(-1, 1);
@@ -958,6 +998,30 @@ var iterate = function(bot, game) {
 					}
 				}
 			}
+		}
+	}
+
+	// eat to heal
+	if (
+		bot.status !== 'Fighting' &&
+		bot.health <= 80 &&
+		!bot.eating &&
+		bot.lifetimeInt % 10 == 0
+	) {
+		let eat = false;
+		let index = 0;
+		let eatIndex = 0;
+		bot.inventory.forEach(function(item) {
+			if (foodJSON[item.name]) {
+				eat = true;
+				eatIndex = index;
+			}
+			index++;
+		});
+		if (eat && Math.random() > bot.health / 100) {
+		  bot.status = "Idle";
+		  bot.stopMining();
+			bot.startEat(eatIndex);
 		}
 	}
 };
