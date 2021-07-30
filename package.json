@@ -5,6 +5,7 @@
   "main": "index.js",
   "dependencies": {
     "express": "^4.17.1",
+    "firebase-admin": "^9.11.0",
     "html": "^1.0.0",
     "matter-js": "^0.17.1",
     "server": "^1.0.27",

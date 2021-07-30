@@ -1,6 +1,14 @@
 const secret = process.env['Password'];
 // -- This is where you tell the server what to do! -- \\
 
+// firebase setup
+var admin = require("firebase-admin");
+var serviceAccount = require("./authenicate").admin();
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: process.env.databaseURL
+});
+
 // load necessary modules to start a socket.io server
 const setup = require('./setup');
 io = setup.io();
