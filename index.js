@@ -1,16 +1,11 @@
 const secret = process.env['Password'];
 // -- This is where you tell the server what to do! -- \\
 
-// firebase setup
-var admin = require("firebase-admin");
-var serviceAccount = require("./authenicate").admin();
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: process.env.databaseURL
-});
-
 // load necessary modules to start a socket.io server
 const setup = require('./setup');
+require('./database').initialize();
+require('./accounts').initialize();
+require('./rooms').initialize();
 io = setup.io();
 
 // load custom-created modules
@@ -79,12 +74,18 @@ io.on('connection', function(socket) {
 	socket.on('verify', function(input, callback) {
 		if (input == secret) {
 			socket.secure = true;
+			callback("success");
+		} else {
+		  callback("error");
 		}
 	});
 
 	socket.on('change name', function(input, callback) {
 		if (input.length >= 3 && input.length <= 20) {
 			socket.name = input;
+			if (socket.login) {
+			  socket.accountData.displayName = input;
+			}
 		}
 	});
 
@@ -152,7 +153,7 @@ io.on('connection', function(socket) {
 			if (
 				checkPacket(parsedPacket, ['xPos', 'yPos', 'xVelocity', 'yVelocity'])
 			) {
-				gameHandler.move(socket.room, socket.uuid, parsedPacket);
+				gameHandler.move(socket.room, socket.id, parsedPacket);
 			}
 		}
 	});
@@ -163,11 +164,11 @@ io.on('connection', function(socket) {
 				gameHandler.destroyBlockEvent(
 					parseInt(parsedPacket.x),
 					parseInt(parsedPacket.y),
-					socket.uuid,
+					socket.id,
 					socket.room
 				);
 			}
-			let inv = gameHandler.updateInventory(socket.room, socket.uuid);
+			let inv = gameHandler.updateInventory(socket.room, socket.id);
 			io.to(socket.id).emit('update inventory', JSON.stringify(inv));
 			callback(parsedPacket.x + ',' + parsedPacket.y);
 		}
@@ -180,7 +181,7 @@ io.on('connection', function(socket) {
 					parseInt(parsedPacket.x),
 					parseInt(parsedPacket.y),
 					parseInt(parsedPacket.slotID),
-					socket.uuid,
+					socket.id,
 					socket.room
 				);
 			}
@@ -190,17 +191,17 @@ io.on('connection', function(socket) {
 	socket.on('animation', function(packet, callback) {
 		if (socket.ingame) {
 			socket.to(socket.room).emit('animation', {
-				uuid: socket.uuid,
+				uuid: socket.id,
 				name: packet
 			});
-			gameHandler.registerAnimation(socket.room, socket.uuid, packet);
+			gameHandler.registerAnimation(socket.room, socket.id, packet);
 		}
 	});
 	socket.on('start mine', function(packet, callback) {
 		if (isDictionary(packet) && socket.ingame) {
 			let parsedPacket = JSON.parse(packet);
 			if (checkPacket(parsedPacket, ['x', 'y'])) {
-				parsedPacket.uuid = socket.uuid;
+				parsedPacket.uuid = socket.id;
 				io.to(socket.room).emit('Mine', parsedPacket);
 			}
 		}
@@ -233,8 +234,14 @@ io.on('connection', function(socket) {
 
 	// initiating matchmaking
 	socket.on('matchmake', function(packet, callback) {
+	  socket.matchmake(packet, callback);
+	});
+	
+	// matchmake function
+	socket.matchmake = function(packet, callback = function(){}) {
 		if (socket.secure) {
 			let matchmake = function() {
+			  console.log("matchmaking success");
 				let parsedPacket = JSON.parse(packet);
 				socket.matchmaking = true;
 				quene[parsedPacket.mode] = quene[parsedPacket.mode] || {};
@@ -243,9 +250,13 @@ io.on('connection', function(socket) {
 					queneCapacity[parsedPacket.mode] = parseInt(
 						parsedPacket.capacity || 10
 					);
+					queneCache[parsedPacket.mode] = {};
+					Object.keys(parsedPacket).forEach(function(key) {
+					  queneCache[parsedPacket.mode][key] = parsedPacket[key];
+					});
 
 					// random chance to have bots
-					if (Math.random() < 0.3) {
+					if (Math.random() < 0.3 && !parsedPacket.disableBots) {
 						let clones = 1 + Math.round(Math.random() * 3);
 						for (i = 0; i < clones; i++) {
 							quene[parsedPacket['mode']][generateUUID()] = {
@@ -265,16 +276,16 @@ io.on('connection', function(socket) {
 					id: socket.id,
 					name: socket.name
 				};
+				io.to(queneCurrent[parsedPacket['mode']]).emit(
+					'update count',
+					Object.keys(quene[parsedPacket['mode']]).length
+				);
 				callback({
 					players: Object.keys(quene[parsedPacket['mode']]).length,
 					quene: Object.keys(quene[parsedPacket['mode']]),
 					id: queneCurrent[parsedPacket['mode']],
 					capacity: queneCapacity[parsedPacket['mode']] || 10
 				});
-				io.to(queneCurrent[parsedPacket['mode']]).emit(
-					'update count',
-					Object.keys(quene[parsedPacket['mode']]).length
-				);
 			};
 			if (isDictionary(packet) && !socket.matchmaking && !socket.ingame) {
 				let parsedPacket = JSON.parse(packet);
@@ -283,7 +294,7 @@ io.on('connection', function(socket) {
 				}
 			}
 		}
-	});
+	}
 
 	// cancel matchmaking
 	let cancelMatchmake = function(reason) {
@@ -312,6 +323,7 @@ io.on('connection', function(socket) {
 			socket.leave(socket.room);
 			socket.leave(socket.room + '-debug');
 			socket.matchmaking = false;
+			socket.leaveRoom();
 		}
 		callback('done');
 	});
@@ -321,6 +333,7 @@ io.on('connection', function(socket) {
 var quene = {};
 var queneCurrent = {};
 var queneCapacity = {};
+var queneCache = {};
 const matchmake = function() {
 	// loop through each matchmaking room
 	let deleteQuenes = [];
@@ -337,7 +350,7 @@ const matchmake = function() {
 				Object.keys(quene[key] || {}).length >= 1 &&
 				Object.keys(quene[key] || {}).length < queneCapacity[key]
 			) {
-				if (Math.random() < 0.15) {
+				if (Math.random() < 0.15 && !queneCache[key].disableBots) {
 					quene[key][generateUUID()] = {
 						type: 'Bot',
 						uuid: generateUUID(),
@@ -377,6 +390,7 @@ const matchmake = function() {
 						io.to(id).emit('start position', matchmakeData.positions[id]);
 						getSocket(id).ingame = true;
 						getSocket(id).matchmaking = false;
+						getSocket(id).host = false;
 					});
 					io.to(roomUUID).emit(
 						'open world',
@@ -396,7 +410,8 @@ const matchmake = function() {
 	// delete empty matchmaking rooms
 	deleteQuenes.forEach(function(key) {
 		delete quene[key];
-		queneCurrent[key] = generateUUID();
+		delete queneCache[key];
+		delete queneCurrent[key];
 	});
 };
 

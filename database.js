@@ -22,4 +22,16 @@ const setup = function() {
   return data;
 }
 
-exports.admin = setup;
+// firebase setup
+const initialize = function() {
+  var admin = require("firebase-admin");
+  var serviceAccount = setup();
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: process.env.databaseURL
+  });
+  const db = admin.firestore();
+  exports.db = db;
+}
+
+exports.initialize = initialize;

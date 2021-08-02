@@ -768,6 +768,7 @@ var iterate = function(bot, game) {
 		if (bot.lifetimeInt % 5 == 0) {
 			// retrieve crate data
 			let crateData = game.crateLoot[bot.crateX + ',' + bot.crateY];
+			if (crateData) {
 			let itemsToTake = [];
 			Object.keys(crateData).forEach(function(slot) {
 				// slot data
@@ -801,6 +802,7 @@ var iterate = function(bot, game) {
 			} else {
 				let index = Math.round(Math.random() * (itemsToTake.length - 1));
 				bot.crateCollectItem(bot.crateX + ',' + bot.crateY, itemsToTake[index]);
+			}
 			}
 		}
 		if (
@@ -1021,7 +1023,9 @@ var iterate = function(bot, game) {
 		if (eat && Math.random() > bot.health / 100) {
 		  bot.status = "Idle";
 		  bot.stopMining();
-			bot.startEat(eatIndex);
+		  setTimeout(function() {
+			  bot.startEat(eatIndex);
+		  }, 1000);
 		}
 	}
 };

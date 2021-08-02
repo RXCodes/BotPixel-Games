@@ -283,8 +283,9 @@ startMatch = function(world, uuid, players) {
 						let item = this.inventory[slot].name;
 						let player = this;
 						this.eatTimer = setTimeout(function() {
+						  if (player.alive) {
 							io.to(player.worldUUID).emit('Stop Eat', player.uuid);
-							player.addToHealth(foodJSON[player.eating].heal, {
+							player.addToHealth(parseFloat(foodJSON[player.eating] || {}.heal) || 0, {
 								type: 'Heal'
 							});
 							player.eating = false;
@@ -294,6 +295,7 @@ startMatch = function(world, uuid, players) {
 								1
 							).inventory;
 							io.to(player.uuid).emit('update inventory', player.inventory);
+						  }
 						}, foodJSON[item].eatDuration * 1000);
 					}
 				}
@@ -395,7 +397,7 @@ startMatch = function(world, uuid, players) {
 				}
 			},
 			addToHealth: function(add, event = {}, effect = 'None') {
-				if (!games[this.worldUUID].winnerDeclared) {
+				if (!(games[this.worldUUID] || {}).winnerDeclared) {
 					this.health += add;
 					this.health = Math.max(this.health, 0);
 					this.health = Math.min(this.health, 100);
@@ -436,7 +438,7 @@ startMatch = function(world, uuid, players) {
 							});
 						}
 						if (event.type == 'Player' && event.uuid !== this.uuid) {
-							if (referPlayer(this.worldUUID, event.uuid) !== {}) {
+							if (referPlayer(this.worldUUID, event.uuid).alive) {
 								referPlayer(this.worldUUID, event.uuid).stats.kills =
 									(referPlayer(this.worldUUID, event.uuid).stats.kills || 0) +
 									1;
@@ -1070,16 +1072,16 @@ const registerAnimation = function(room, uuid, input) {
 io.on('connection', function(socket) {
 	socket.on('drop item', function(input, callback) {
 		if (socket.ingame) {
-			if (referPlayer(socket.room, socket.uuid).alive) {
-				referPlayer(socket.room, socket.uuid).dropItem(parseInt(input));
+			if (referPlayer(socket.room, socket.id).alive) {
+				referPlayer(socket.room, socket.id).dropItem(parseInt(input));
 			}
 		}
 	});
 	socket.on('Crate Deposit', function(input, callback) {
 		if (socket.ingame && isDictionary(input)) {
-			if (referPlayer(socket.room, socket.uuid).alive) {
+			if (referPlayer(socket.room, socket.id).alive) {
 				let parsedInput = JSON.parse(input);
-				referPlayer(socket.room, socket.uuid).crateStoreItem(
+				referPlayer(socket.room, socket.id).crateStoreItem(
 					parsedInput.position,
 					parseInt(parsedInput['target slot']),
 					parseInt(parsedInput['inventory slot'])
@@ -1090,8 +1092,8 @@ io.on('connection', function(socket) {
 	socket.on('Crate Collect', function(input, callback) {
 		if (socket.ingame && isDictionary(input)) {
 			let parsedInput = JSON.parse(input);
-			if (referPlayer(socket.room, socket.uuid).alive) {
-				referPlayer(socket.room, socket.uuid).crateCollectItem(
+			if (referPlayer(socket.room, socket.id).alive) {
+				referPlayer(socket.room, socket.id).crateCollectItem(
 					parsedInput.position,
 					parseInt(parsedInput['target slot'])
 				);
@@ -1100,22 +1102,22 @@ io.on('connection', function(socket) {
 	});
 	socket.on('TNT Ignite', function(input, callback) {
 		if (socket.ingame) {
-			if (referPlayer(socket.room, socket.uuid).alive) {
-				referPlayer(socket.room, socket.uuid).igniteTNT(input);
+			if (referPlayer(socket.room, socket.id).alive) {
+				referPlayer(socket.room, socket.id).igniteTNT(input);
 			}
 		}
 	});
 	socket.on('Eat', function(input, callback) {
 		if (socket.ingame) {
-			if (referPlayer(socket.room, socket.uuid).alive) {
-				referPlayer(socket.room, socket.uuid).startEat(parseInt(input));
+			if (referPlayer(socket.room, socket.id).alive) {
+				referPlayer(socket.room, socket.id).startEat(parseInt(input));
 			}
 		}
 	});
 	socket.on('Cancel Eat', function(input, callback) {
 		if (socket.ingame) {
-			if (referPlayer(socket.room, socket.uuid).alive) {
-				referPlayer(socket.room, socket.uuid).cancelEat();
+			if (referPlayer(socket.room, socket.id).alive) {
+				referPlayer(socket.room, socket.id).cancelEat();
 			}
 		}
 	});
