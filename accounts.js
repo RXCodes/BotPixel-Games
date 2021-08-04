@@ -1,3 +1,5 @@
+const hyperPad = require('./jsonsafe');
+
 // account access and interaction
 const setup = require('./setup');
 var io = setup.io();
@@ -165,16 +167,16 @@ const initialize = function() {
 							doc = user.get().then(doc => {
 								account = doc.data();
 								if (account.password == data.password) {
-								  if (players[account.uuid] !== undefined && false) {
+								  if (players[account.uuid] !== undefined) {
 								    io.to(players[account.uuid]).emit("force disconnect", "Your account was logged in from another location.");
-								    getSocket(players[account.uuid]).disconnect();
+								    try {getSocket(players[account.uuid]).disconnect()};
 								  }
 								  players[account.uuid] = socket.id; 
 									socket.login = true;
 									socket.uuid = account.uuid;
 									socket.name = account.displayName;
 									socket.accountData = account;
-									callback("success", account);
+									callback("success", hyperPad.serialize(account));
 									return true;
 								} else {
 								  callback('error', 'Invalid password or username.');
@@ -304,7 +306,7 @@ const initialize = function() {
 			  user.set(socket.accountData);
 	    }
 	  });
-	}, 60 * 1000);
+	}, 60 * 1000 * 5);
 	
 };
 

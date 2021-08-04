@@ -1,4 +1,5 @@
-const passableBlocks = ['Oak Log', 'Birch Log', "Wood Crate", "Iron Crate", "Gold Crate"];
+const passableBlocks = ['Oak Log', 'Birch Log', "Wood Crate", "Iron Crate", "Gold Crate","Big Stalagtite, Medium Stalagtite", "Medium Stalagtite 2", "Medium Stalagtite 3", "Small Stalagtite", "Small Stalagtite 2", "Small Stalagtite 3", "Small Stalagtite 4", "Small Stalagtite 5", "Small Stalagtite 6", "Small Stalagtite 7", "Big Stalagtite 2"
+];
 const glowingBlocks = ['Glowing Amber', 'Deep Glowing Amber'];
 const usefulBlocks = ['Oak Log', 'Birch Log', 'Wood Crate', 'Iron Crate', 'Gold Crate', 'Gold Ore', 'Diamond Ore', 'Deep Gold Ore', 'Deep Glowing Amber', 'Glowing Amber', 'Deep Bixbite Ore', 'Bixbite Ore'];
 const interestPriority = {
@@ -62,7 +63,20 @@ const blockBreakingTime = {
 	'Iron Crate': 2.5,
 	'Gold Crate': 3,
 	'Stone Bricks': 2.8,
-	'TNT': 0.5
+	'TNT': 0.5,
+	'Limestone': 0.5,
+	'Big Stalagtite': 0.5,
+	'Medium Stalagtite': 0.3,
+	'Medium Stalagtite 2': 0.3,
+	'Medium Stalagtite 3': 0.3,
+	'Small Stalagtite': 0.2,
+	'Small Stalagtite 2': 0.2,
+	'Small Stalagtite 3': 0.2,
+	'Small Stalagtite 4': 0.2,
+	'Small Stalagtite 5': 0.2,
+	'Small Stalagtite 6': 0.2,
+	'Small Stalagtite 7': 0.2,
+	'Big Stalagtite 2': 0.5
 };
 
 const blockBreakSoundFX = {
@@ -79,7 +93,7 @@ const blockBreakSoundFX = {
 	'Deep Body Fossil': 'Deep Fossil',
 	'Deep Fossil': 'Deep Fossil',
 	'Deep Glowing Amber': 'Deep Amber',
-	'Deep Gold Ore': 'Deep Ore',
+	'Deep Gold Ore': 'Ore',
 	'Deep Rib Fossil': 'Deep Fossil',
 	'Diamond Ore': 'Diamond',
 	Dirt: 'Dirt',
@@ -111,7 +125,20 @@ const blockBreakSoundFX = {
 	'Iron Crate': 'Stone Fossil',
 	'Gold Crate': 'Amber',
 	'Stone Bricks': 'Stone Fossil',
-	'TNT': 'TNT'
+	'TNT': 'TNT',
+	'Limestone': 'Stone Fossil',
+	'Big Stalagtite': 'Stone Fossil',
+	'Medium Stalagtite': 'Stone Fossil',
+	'Medium Stalagtite 2': 'Stone Fossil',
+	'Medium Stalagtite 3': 'Stone Fossil',
+	'Small Stalagtite': 'Stone Fossil',
+	'Small Stalagtite 2': 'Stone Fossil',
+	'Small Stalagtite 3': 'Stone Fossil',
+	'Small Stalagtite 4': 'Stone Fossil',
+	'Small Stalagtite 5': 'Stone Fossil',
+	'Small Stalagtite 6': 'Stone Fossil',
+	'Small Stalagtite 7': 'Stone Fossil',
+	'Big Stalagtite 2': 'Stone Fossil'
 };
 const lootTable = {
 	Basalt: 'Basalt',
@@ -152,7 +179,8 @@ const lootTable = {
 	'Stone Bricks': 'Stone Bricks',
 	'Oak Leaves': {'item': 'Sticks', 'chance': 0.2, 'minCount': 1, 'maxCount': 2},
 	'Birch Leaves': {'item': 'Sticks', 'chance': 0.2, 'minCount': 1, 'maxCount': 2},
-	'TNT': 'TNT'
+	'TNT': 'TNT',
+	'Limestone': 'Limestone'
 };
 
 var blocks = {};

@@ -6,9 +6,9 @@ const defaultWorldSettings = {
 	maxSineFrequency: 0.7,
 	minSineMultiplier: 0.5,
 	maxSineMultiplier: 25,
-	caveCount: 8,
-	caveSizeRange: 5,
-	caveMinSize: 2,
+	caveCount: 10,
+	caveSizeRange: 3,
+	caveMinSize: 3,
 	maxCaveLevel: 50,
 	dirtBallCount: 18,
 	dirtBallSizeRange: 5,
@@ -24,7 +24,12 @@ const defaultWorldSettings = {
 	woodCrateGapMin: 5,
 	woodCrateGapRange: 5,
 	dungeonCount: 20,
-	dungeonSpawnLayer: 10
+	dungeonSpawnLayer: 10,
+	caveTypes: ["Limestone", "Overgrown"],
+	caveBiomeChance: 0.8,
+	minStalagtiteLength: 2,
+	stalagtiteLengthRange: 3,
+	extendedStalagtiteChance: 0.15
 };
 
 const blockDataScope = require("./blocks");
@@ -36,6 +41,13 @@ const distance = function(x, y, x2, y2) {
 	yDelta = (y2 - y) * (y2 - y);
 	return Math.sqrt(xDelta + yDelta);
 };
+const proximity = function(xDelta, yDelta, distance) {
+  let d = (xDelta ** 2) + (yDelta ** 2);
+  if (d <= distance ** 2) {
+    return true;
+  }
+  return false;
+}
 
 var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings) {
 	// initialize
@@ -112,7 +124,7 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 	  }
 	  if ((blocksJSON[id] || {}).passable == undefined) {
 	    collisions[position] = true;
-	    blockCost[chunkPosition] = blocksJSON[id].breakDuration;
+	    blockCost[chunkPosition] = (blocksJSON[id] || {}).breakDuration;
 	  }
 	  if ((blocksJSON[id] || {}).useful !== undefined) {
 	    interests[position] = id;
@@ -144,7 +156,7 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 		y = Math.round(y);
 		for (xPos = x - range; xPos < x + range; xPos++) {
 			for (yPos = y - range; yPos < y + range; yPos++) {
-				if (distance(xPos, yPos, x, y) < diameter / 2) {
+				if (proximity(xPos - x, yPos - y, diameter / 2)) {
 					if (yPos > 5) {
 						let position = parseInt(xPos) + ',' + parseInt(yPos);
 						destroyBlock(xPos, yPos);
@@ -154,29 +166,43 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 		}
 	};
 
-	var setRadius = function(x, y, diameter, block) {
+	var setRadius = function(x, y, diameter, block, replaceBlock = "All") {
+	  x = Math.round(x);
+		y = Math.round(y);
 		let range = Math.floor(diameter / 2);
 		for (xPos = x - range; xPos < x + range; xPos++) {
 			for (yPos = y - range; yPos < y + range; yPos++) {
-				if (distance(xPos, yPos, x, y) < diameter / 2) {
+				if (proximity(xPos - x, yPos - y, diameter / 2)) {
 					let position = parseInt(xPos) + ',' + parseInt(yPos);
 					if (world[position] !== undefined && world[position] !== 'Bedrock') {
-						placeBlock(xPos, yPos, block);
+					  if (replaceBlock == "All" || replaceBlock == world[position]) {
+					    placeBlock(xPos, yPos, block);
+					  }
+					  if (replaceBlock == "Solid" && world[position]) {
+					    placeBlock(xPos, yPos, block);
+					  }
 					}
 				}
 			}
 		}
 	};
 
-	var scatterRadius = function(x, y, diameter, block, chance) {
+	var scatterRadius = function(x, y, diameter, block, chance, replaceBlock = "All") {
+	  x = Math.round(x);
+		y = Math.round(y);
 		let range = Math.floor(diameter / 2);
 		for (xPos = x - range; xPos < x + range; xPos++) {
 			for (yPos = y - range; yPos < y + range; yPos++) {
-				if (distance(xPos, yPos, x, y) < diameter / 2) {
+				if (proximity(xPos - x, yPos - y, diameter / 2)) {
 					let position = parseInt(xPos) + ',' + parseInt(yPos);
 					if (world[position] !== undefined && world[position] !== 'Bedrock') {
 						if (Math.random() < chance) {
-							placeBlock(xPos, yPos, block);
+						  if (replaceBlock == "All" || replaceBlock == world[position]) {
+						    placeBlock(xPos, yPos, block);
+						  }
+						  if (replaceBlock == "Solid" && world[position]) {
+					      placeBlock(xPos, yPos, block);
+					    }
 						}
 					}
 				}
@@ -355,14 +381,20 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 		let yVelocity = Math.cos(angle);
 		let targetXVelocity = Math.sin(targetAngle);
 		let targetYVelocity = Math.cos(targetAngle);
+		let caveTypeIndex = Math.round((Math.random() * settings.caveTypes.length) - 1);
+		let caveType = "None";
+		if (Math.random() < settings.caveBiomeChance) {
+		  caveType = settings.caveTypes[caveTypeIndex];
+		}
+		let stalagmitePos = {};
 
 		while (caveLength > 0) {
 			caveLength--;
 			clearRadius(caveX, caveY, caveRadius);
 
 			// clear cave path
-			caveX += xVelocity * 2.15;
-			caveY += yVelocity * 1.2;
+			caveX += xVelocity * 2.25;
+			caveY += yVelocity * 0.9;
 			xVelocity += (targetXVelocity - xVelocity) / 6;
 			yVelocity += (targetYVelocity - yVelocity) / 6;
 			if (Math.round((targetXVelocity - xVelocity) * 10) == 0) {
@@ -371,6 +403,22 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 					targetXVelocity = Math.sin(targetAngle);
 					targetYVelocity = Math.cos(targetAngle);
 				}
+			}
+			
+			// limestone cave
+			if (Math.random() < 0.8 && caveType == "Limestone") {
+			  scatterRadius(caveX, caveY, caveRadius + 6.5 + Math.random(), "Limestone", 0.5, "Solid");
+			  let stalX = Math.round((Math.random() - 0.5) * caveRadius + caveX);
+			  let stalPos = stalX + "," + Math.ceil(caveY);
+			  stalagmitePos[stalPos] = {x: stalX, y: Math.ceil(caveY)};
+			}
+			
+			// overgrown cave
+			if (caveType == "Overgrown") {
+			  if (Math.random() < 0.3) {
+			    scatterRadius(caveX, caveY, caveRadius + 6.5 + Math.random(), "Dirt", 0.25, "Solid");
+			  }
+			  setRadius(caveX, caveY - caveRadius, caveRadius / 2.2, "Dirt", "Solid");
 			}
 
 			// vary in size throughout path
@@ -385,12 +433,56 @@ var generateWorld = function(chunkSize = 5, worldSettings = defaultWorldSettings
 				break;
 			}
 		}
+		
+		// after clearing path
+		
+		// stalagmites in limestone caves
+		if (caveType == "Limestone") {
+		  Object.keys(stalagmitePos).forEach(function(stal) {
+		    let x = stalagmitePos[stal].x;
+		    let y = stalagmitePos[stal].y;
+		    
+		    // find ceiling
+		    let ceiling = false;
+		    let ceilPos = undefined;
+		    for (i = 1; i <= 10; i++) {
+		      if (world[x + "," + Math.round(y + i)]) {
+		        ceilPos = Math.round(y + i);
+		        ceiling = true;
+		        break;
+		      }
+		    }
+		    
+		    // place stalagtites
+		    if (ceiling) {
+		      if (Math.random() > settings.extendedStalagtiteChance) {
+		        let stalagtites = ["Big Stalagtite", "Big Stalagtite", "Medium Stalagtite", "Medium Stalagtite 2", "Medium Stalagtite 3", "Small Stalagtite", "Small Stalagtite 2", "Small Stalagtite 3", "Small Stalagtite 4", "Small Stalagtite 5", "Small Stalagtite 6", "Small Stalagtite 7"];
+		        let index = Math.round(Math.random() * (stalagtites.length - 1));
+		        if (world[x + "," + ceilPos] == "Limestone" || world[x + "," + ceilPos] == "Stone" || world[x + "," + ceilPos] == "Basalt") {
+		          placeBlock(x, ceilPos, stalagtites[index]);
+		        }
+		      } else {
+		        let stalagtiteLength = settings.minStalagtiteLength + Math.round(Math.random() * settings.stalagtiteLengthRange);
+		        let finalYPos = 0;
+		        for (i = 0; i < stalagtiteLength - 1; i++) {
+		          if (!world[x + "," + ceilPos - i]) {
+		            placeBlock(x, ceilPos - i, "Big Stalagtite 2");
+		            finalYPos = ceilPos - i;
+		          } else {
+		            break;
+		          }
+		        }
+		        placeBlock(x, finalYPos, "Big Stalagtite");
+		      }
+		    }
+		    
+		  });
+		}
 	};
 
 	// cave placement
 	for (i = 0; i < settings.caveCount; i++) {
-		let x = Math.round(Math.random() * settings.worldSize * 2);
-		x -= Math.floor(settings.worldSize);
+		let x = Math.round((Math.random() - 0.5) * settings.worldSize);
 		let y = Math.round(Math.random() * settings.maxCaveLevel);
 		let radius = Math.random() * settings.caveSizeRange + settings.caveMinSize;
 		generateCave(x, y, radius);

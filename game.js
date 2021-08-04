@@ -124,12 +124,23 @@ const referPlayer = function(worldUUID, uuid) {
 	return { error: 'Player does not exist.' };
 };
 
+// default room settings
+const defaultSettings = {
+  classic: true,
+  shrinkingPlayzone: true,
+  autofillBots: true
+}
+
 // start match
-startMatch = function(world, uuid, players) {
+startMatch = function(world, uuid, players, settings) {
 	endMatch(games[uuid]);
+	if (!settings) {
+	  settings = defaultSettings;
+	}
 
 	blocksJSON = blockDataScope.blocks();
 	games[uuid] = {
+	  settings: settings,
 		world: world.world,
 		collisions: world.collisions,
 		interests: world.interests,
@@ -285,7 +296,7 @@ startMatch = function(world, uuid, players) {
 						this.eatTimer = setTimeout(function() {
 						  if (player.alive) {
 							io.to(player.worldUUID).emit('Stop Eat', player.uuid);
-							player.addToHealth(parseFloat(foodJSON[player.eating] || {}.heal) || 0, {
+							player.addToHealth((foodJSON[player.eating] || {}).heal || 0, {
 								type: 'Heal'
 							});
 							player.eating = false;
@@ -463,6 +474,7 @@ startMatch = function(world, uuid, players) {
 							uuid,
 							name
 						});
+						clearTimeout(this.eatTimer);
 						this.inventory.forEach(function(item) {
 							summonItem(
 								worldUUID,
@@ -1265,9 +1277,11 @@ const match = function(game) {
 		if (game.gracePeriod < Date.now() && !game.pvp && !game.gameEnd) {
 			pushEvent(game.uuid, 'Grace Period End', {});
 			game.zoneIteration = 1;
-			game.timer = setTimeout(function() {
-				nextZone();
-			}, 8 * 1000);
+			if (game.settings.shrinkingPlayzone) {
+		    game.timer = setTimeout(function() {
+			   	nextZone();
+	     	}, 8 * 1000);
+			}
 			game.currentDisasterEvents = {};
 			game.pvp = true;
 		}

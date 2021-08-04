@@ -1,4 +1,5 @@
 const setup = require('./setup');
+const hyperPad = require('./jsonsafe');
 io = setup.io();
 var rooms = {};
 var roomPasswords = {};
@@ -107,15 +108,19 @@ io.on('connection', function(socket) {
           roomName: data.name,
           host: socket.name,
           takenNames: {},
+          playerList: {},
           state: "Ready"
         };
         room.takenNames[socket.name] = socket.id;
+        room.playerList[socket.name] = {uuid: socket.uuid, avatar: socket.accountData.avatar || {}};
         rooms[roomID] = room;
         socket.join(roomID);
         socket.room = roomID;
+        socket.customRoom = roomID;
         socket.inCustomRoom = true;
         socket.host = true;
         let output = JSON.parse(JSON.stringify(room));
+        output.playerList = JSON.stringify(room.playerList);
         output.takenNames = JSON.stringify(room.takenNames);
         output.meta = JSON.stringify(room.meta);
         callback("success", output)
@@ -131,22 +136,30 @@ io.on('connection', function(socket) {
   
   // leave a custom created room 
   socket.leaveRoom = function() {
-    if (socket.secure && socket.inCustomRoom && rooms[socket.room]) {
+    if (socket.secure && socket.inCustomRoom && rooms[socket.customRoom]) {
       socket.leave(socket.room);
       socket.inCustomRoom = false;
-      rooms[socket.room].players--;
-      io.to(socket.room).emit("Room Disconnect", socket.name);
-      delete rooms[socket.room].takenNames[socket.name];
-      if (rooms[socket.room].players == 0) {
-        delete rooms[socket.room];
+      rooms[socket.customRoom].players--;
+      io.to(socket.customRoom).emit("Room Disconnect", socket.name);
+      delete rooms[socket.customRoom].takenNames[socket.name];
+      delete rooms[socket.customRoom].playerList[socket.name];
+      if (rooms[socket.customRoom].players == 0) {
+        delete rooms[socket.customRoom];
       } else if (socket.host) {
-        let newHost = Object.keys(rooms[socket.room].takenNames)[0];
+        let newHost = Object.keys(rooms[socket.customRoom].takenNames)[0];
         getSocket(newHost).host = true;
         io.to(newHost).emit("Nominated Host", "You are now the host of the room.");
       }
       socket.host = false;
     }
   }
+  
+  // send chat message in room 
+  socket.on("send message", function(input, callback) {
+    if (socket.secure && socket.inCustomRoom) {
+      io.to(socket.room).emit("room chat message", socket.name, input);
+    }
+  });
   
   // join custom created room
   socket.on("join room", function(input, callback) {
@@ -181,14 +194,16 @@ io.on('connection', function(socket) {
           }
           
           // join room
+          io.to(data.id).emit("Player Join", {uuid: socket.uuid, name: socket.name});
           socket.join(data.id);
           socket.room = data.id;
+          socket.customRoom = data.id;
           socket.inCustomRoom = true;
           rooms[data.id].players++;
           rooms[data.id].takenNames[socket.name] = socket.id;
-          io.to(data.id).emit("Player Join", {uuid: socket.uuid, name: socket.name});
+          rooms[data.id].playerList[socket.name] = {uuid: socket.uuid, avatar: socket.accountData || {}.avatar || {}};
           
-          callback("success", rooms[data.id]);
+          callback("success", hyperPad.serialize(rooms[data.id]));
           
         }
         pass();
@@ -218,13 +233,12 @@ io.on('connection', function(socket) {
           mode: roomData.id,
           disableBots,
           customRoom: true,
+          meta: roomData.meta,
           map: "Custom"
         }
         matchmakingPacket = JSON.stringify(matchmakingPacket);
         Object.keys(roomData.takenNames).forEach(function(name) {
-          console.log(name);
           if (getSocket(roomData.takenNames[name]).uuid) {
-            console.log(name + " done");
             getSocket(roomData.takenNames[name]).matchmake(matchmakingPacket);
           }
         });

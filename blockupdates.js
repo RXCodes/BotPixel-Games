@@ -31,6 +31,9 @@ const blockUpdate = function(x, y, world) {
 		if (!left && !right) {
 			placeBlock(x, y, 'Standalone Grass');
 		}
+		if (world[x + "," + Math.round(y + 1)]) {
+		  placeBlock(x, y, 'Dirt');
+		}
 	}
 	
 	// root block

@@ -71,7 +71,7 @@ var iterate = function(bot, game) {
 
 		// break block function
 		bot.break = function(x, y) {
-			blockData = blocksJSON[game.world[x + ',' + y]];
+			let blockData = blocksJSON[game.world[x + ',' + y]];
 			if (blockData !== undefined) {
 				if (blockData.drops !== undefined) {
 					const givePlayer = function(item, count) {
@@ -174,7 +174,7 @@ var iterate = function(bot, game) {
 				if (game.world[newX + ',' + newY] == undefined) {
 					world.placeBlock(uuid, newX, newY, bot.inventory[useSlot].name);
 					let type = 'Items/';
-					if (getBlock(blockData.drops).breakDuration) {
+					if (getBlock(bot.inventory[useSlot].name).breakDuration) {
 						type = 'Blocks/';
 					}
 					bot.holdItem(type + bot.inventory[useSlot].name);
@@ -186,6 +186,7 @@ var iterate = function(bot, game) {
 
 		// pathfind destination
 		bot.pathfind = function(x, y, intent = 'None') {
+		  if (false) {
 			let result = pathfind.start(
 				{ x: Math.round(bot.x), y: Math.round(bot.y) },
 				{ x: Math.round(x), y: Math.round(y) },
@@ -203,6 +204,9 @@ var iterate = function(bot, game) {
 				bot.status = 'Travelling';
 				bot.debugChat('Failed to pathfind.');
 			}
+		  } else {
+		    bot.status = "Travelling";
+		  }
 			bot.destination = { x, y };
 		};
 
@@ -224,6 +228,7 @@ var iterate = function(bot, game) {
 		// set bot to hold item
 		bot.holdItem = function(item) {
 			if (bot.holding !== item) {
+			  bot.cancelEat();
 				bot.holding = item;
 				io.to(bot.worldUUID).emit('animation', {
 					uuid: bot.uuid,
@@ -835,7 +840,7 @@ var iterate = function(bot, game) {
 							uuid,
 							bot.x,
 							bot.y,
-							blockData.drops,
+							woodType,
 							give.leftOver
 						);
 					}
@@ -1023,6 +1028,7 @@ var iterate = function(bot, game) {
 		if (eat && Math.random() > bot.health / 100) {
 		  bot.status = "Idle";
 		  bot.stopMining();
+		  bot.holdItem("Items/" + bot.inventory[eatIndex].name);
 		  setTimeout(function() {
 			  bot.startEat(eatIndex);
 		  }, 1000);

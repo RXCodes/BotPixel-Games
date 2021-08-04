@@ -14,6 +14,7 @@ const worldGen = require('./worldgen');
 const gameHandler = require('./game');
 const blockData = require('./blocks');
 const crateLoot = require('./crateloot');
+const hyperPad = require('./jsonsafe');
 const food = require('./food');
 const foodJSON = food.foodJSON();
 crateLoot.setup();
@@ -65,7 +66,7 @@ const generateBotName = function() {
 // socket.io events
 io.on('connection', function(socket) {
 	// initialize variables
-	io.to(socket.id).emit('connected', Date.now() / 1000);
+	io.to(socket.id).emit('connected', JSON.stringify(Date.now() / 1000));
 	socket.uuid = socket.id;
 	socket.matchmaking = false;
 	socket.ingame = false;
@@ -241,7 +242,6 @@ io.on('connection', function(socket) {
 	socket.matchmake = function(packet, callback = function(){}) {
 		if (socket.secure) {
 			let matchmake = function() {
-			  console.log("matchmaking success");
 				let parsedPacket = JSON.parse(packet);
 				socket.matchmaking = true;
 				quene[parsedPacket.mode] = quene[parsedPacket.mode] || {};
@@ -280,12 +280,12 @@ io.on('connection', function(socket) {
 					'update count',
 					Object.keys(quene[parsedPacket['mode']]).length
 				);
-				callback({
+				callback(hyperPad.serialize({
 					players: Object.keys(quene[parsedPacket['mode']]).length,
 					quene: Object.keys(quene[parsedPacket['mode']]),
 					id: queneCurrent[parsedPacket['mode']],
 					capacity: queneCapacity[parsedPacket['mode']] || 10
-				});
+				}));
 			};
 			if (isDictionary(packet) && !socket.matchmaking && !socket.ingame) {
 				let parsedPacket = JSON.parse(packet);
@@ -305,7 +305,7 @@ io.on('connection', function(socket) {
 			delete (quene[socket.matchmakingMode] || {})[socket.id];
 			io.to(socket.room).emit(
 				'update count',
-				Object.keys(quene[socket.matchmakingMode] || {}).length
+				JSON.stringify(Object.keys(quene[socket.matchmakingMode] || {}).length)
 			);
 		}
 	};
@@ -383,9 +383,10 @@ const matchmake = function() {
 				}
 			});
 			if (start) {
-				setTimeout(function() {
+				const startGame = function(roomData) {
+				  setTimeout(function() {
 					let world = worldGen.generateWorld();
-					let matchmakeData = gameHandler.startMatch(world, roomUUID, ids);
+					let matchmakeData = gameHandler.startMatch(world, roomUUID, ids, roomData);
 					Object.keys(matchmakeData.positions).forEach(function(id) {
 						io.to(id).emit('start position', matchmakeData.positions[id]);
 						getSocket(id).ingame = true;
@@ -394,12 +395,18 @@ const matchmake = function() {
 					});
 					io.to(roomUUID).emit(
 						'open world',
-						world.world,
+						hyperPad.serialize(world.world),
 						world.chunks,
-						world.crateLoot
+						hyperPad.serialize(world.crateLoot)
 					);
-					io.to(roomUUID).emit('loot', world.crateLoot);
-				}, 1000);
+					io.to(roomUUID).emit('loot', hyperPad.serialize(world.crateLoot));
+				  }, 1000);
+				}
+				let meta = false;
+				if (queneCache[key].customRoom) {
+				  meta = queneCache[key].meta;
+				}
+				startGame(meta);
 			}
 
 			// destroy matchmaking room if full
@@ -447,5 +454,5 @@ setInterval(function() {
 
 // ping all connected clients
 setInterval(function() {
-	io.emit('timestamp', Date.now() / 1000);
+	io.emit('timestamp', JSON.stringify(Date.now() / 1000));
 }, 1000);
