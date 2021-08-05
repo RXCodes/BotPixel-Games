@@ -400,6 +400,7 @@ const matchmake = function() {
 						hyperPad.serialize(world.crateLoot)
 					);
 					io.to(roomUUID).emit('loot', hyperPad.serialize(world.crateLoot));
+					io.to(roomUUID).emit('player count', JSON.stringify(ids.length));
 				  }, 1000);
 				}
 				let meta = false;

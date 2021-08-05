@@ -169,7 +169,7 @@ const initialize = function() {
 								if (account.password == data.password) {
 								  if (players[account.uuid] !== undefined) {
 								    io.to(players[account.uuid]).emit("force disconnect", "Your account was logged in from another location.");
-								    try {getSocket(players[account.uuid]).disconnect()};
+								    try {getSocket(players[account.uuid]).disconnect()}catch(e){};
 								  }
 								  players[account.uuid] = socket.id; 
 									socket.login = true;

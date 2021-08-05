@@ -1,4 +1,4 @@
-const passableBlocks = ['Oak Log', 'Birch Log', "Wood Crate", "Iron Crate", "Gold Crate","Big Stalagtite, Medium Stalagtite", "Medium Stalagtite 2", "Medium Stalagtite 3", "Small Stalagtite", "Small Stalagtite 2", "Small Stalagtite 3", "Small Stalagtite 4", "Small Stalagtite 5", "Small Stalagtite 6", "Small Stalagtite 7", "Big Stalagtite 2"
+const passableBlocks = ['Oak Log', 'Birch Log', "Wood Crate", "Iron Crate", "Gold Crate","Big Stalagtite", "Big Blooming Stalagtite", "Medium Stalagtite", "Medium Stalagtite 2", "Medium Stalagtite 3", "Small Stalagtite", "Small Stalagtite 2", "Small Stalagtite 3", "Small Stalagtite 4", "Small Stalagtite 5", "Small Stalagtite 6", "Small Stalagtite 7", "Big Stalagtite 2", "Limestone Rock", "Limestone Rock 2", "Limestone Rock 3", "Brown Mushroom", "Brown Mushroom Patch", "Red Mushroom", "Tall Grass", "Short Grass"
 ];
 const glowingBlocks = ['Glowing Amber', 'Deep Glowing Amber'];
 const usefulBlocks = ['Oak Log', 'Birch Log', 'Wood Crate', 'Iron Crate', 'Gold Crate', 'Gold Ore', 'Diamond Ore', 'Deep Gold Ore', 'Deep Glowing Amber', 'Glowing Amber', 'Deep Bixbite Ore', 'Bixbite Ore'];
@@ -66,6 +66,7 @@ const blockBreakingTime = {
 	'TNT': 0.5,
 	'Limestone': 0.5,
 	'Big Stalagtite': 0.5,
+	'Big Blooming Stalagtite': 0.5,
 	'Medium Stalagtite': 0.3,
 	'Medium Stalagtite 2': 0.3,
 	'Medium Stalagtite 3': 0.3,
@@ -76,7 +77,18 @@ const blockBreakingTime = {
 	'Small Stalagtite 5': 0.2,
 	'Small Stalagtite 6': 0.2,
 	'Small Stalagtite 7': 0.2,
-	'Big Stalagtite 2': 0.5
+	'Big Stalagtite 2': 0.5,
+	'Limestone Rock': 0.4,
+	'Limestone Rock 2': 0.4,
+	'Limestone Rock 3': 0.4,
+	'Clay': 0.4,
+	'Limestone Table': 0.75,
+	'Limestone Quartz Ore': 0.5,
+	'Red Mushroom': 0.1,
+	'Brown Mushroom': 0.1,
+	'Brown Mushroom Patch': 0.3,
+	'Tall Grass': 0,
+	'Short Grass': 0
 };
 
 const blockBreakSoundFX = {
@@ -138,7 +150,18 @@ const blockBreakSoundFX = {
 	'Small Stalagtite 5': 'Stone Fossil',
 	'Small Stalagtite 6': 'Stone Fossil',
 	'Small Stalagtite 7': 'Stone Fossil',
-	'Big Stalagtite 2': 'Stone Fossil'
+	'Big Stalagtite 2': 'Stone Fossil',
+	'Limestone Rock': 'Stone Fossil',
+	'Limestone Rock 2': 'Stone Fossil',
+	'Limestone Rock 3': 'Stone Fossil',
+	'Clay': 'Kimberlite',
+	'Big Blooming Stalagtite': 'Kimberlite',
+	'Limestone Table': 'Kimberlite',
+	'Brown Mushroom': 'Dirt',
+	'Brown Mushroom Patch': 'Dirt',
+	'Red Mushroom': 'Dirt',
+	'Tall Grass': 'Grass',
+	'Short Grass': 'Grass'
 };
 const lootTable = {
 	Basalt: 'Basalt',
@@ -180,7 +203,9 @@ const lootTable = {
 	'Oak Leaves': {'item': 'Sticks', 'chance': 0.2, 'minCount': 1, 'maxCount': 2},
 	'Birch Leaves': {'item': 'Sticks', 'chance': 0.2, 'minCount': 1, 'maxCount': 2},
 	'TNT': 'TNT',
-	'Limestone': 'Limestone'
+	'Limestone': 'Limestone',
+	'Clay': 'Clay',
+	'Limestone Quartz Ore': 'Limestone Quartz Ore'
 };
 
 var blocks = {};

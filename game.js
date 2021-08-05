@@ -883,7 +883,7 @@ const destroyBlock = function(worldUUID, x, y, uuid = 'bot') {
 		delete games[worldUUID].crateLoot[position];
 		delete games[worldUUID].blockCost[position];
 	}
-	games[worldUUID].world = blockUpdate.update(x, y, games[worldUUID].world);
+	games[worldUUID].world = blockUpdate.update(x, y, games[worldUUID].world, worldUUID);
 	updateChunk(worldUUID, x, y);
 };
 
@@ -905,7 +905,7 @@ const placeBlock = function(worldUUID, x, y, block, blockData = {}) {
 		games[worldUUID].collisions[position] = true;
 		games[worldUUID].blockCost[position] = blocksJSON[block].blockCost;
 	}
-	games[worldUUID].world = blockUpdate.update(x, y, games[worldUUID].world);
+	games[worldUUID].world = blockUpdate.update(x, y, games[worldUUID].world, worldUUID);
 	updateChunk(worldUUID, x, y);
 };
 
@@ -1223,6 +1223,7 @@ exports.gameEvents = fetchGameEvents;
 exports.clearEvents = clearEvents;
 exports.placeBlock = placeBlock;
 exports.destroyBlock = destroyBlock;
+exports.updateChunk = updateChunk;
 exports.emit = pushEvent;
 exports.summonItem = summonItem;
 exports.move = movePlayer;
