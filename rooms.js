@@ -139,6 +139,7 @@ io.on('connection', function(socket) {
     if (socket.secure && socket.inCustomRoom && rooms[socket.customRoom]) {
       socket.leave(socket.room);
       socket.inCustomRoom = false;
+      socket.creative = false;
       rooms[socket.customRoom].players--;
       io.to(socket.customRoom).emit("Room Disconnect", socket.name);
       delete rooms[socket.customRoom].takenNames[socket.name];
@@ -228,6 +229,7 @@ io.on('connection', function(socket) {
           disableBots = true;
           capacity = roomData.players;
         }
+        roomData.meta.customRoom = true;
         let matchmakingPacket = {
           capacity,
           mode: roomData.id,
@@ -240,6 +242,9 @@ io.on('connection', function(socket) {
         Object.keys(roomData.takenNames).forEach(function(name) {
           if (getSocket(roomData.takenNames[name]).uuid) {
             getSocket(roomData.takenNames[name]).matchmake(matchmakingPacket);
+            if (roomData.meta.creative) {
+              getSocket(roomData.takenNames[name]).creative = true;
+            }
           }
         });
         callback("success", "Game is starting!");

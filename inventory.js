@@ -1,16 +1,29 @@
 const maxSlotCount = 7;
-const maxItemCount = 99;
+const defaultMaxItemCount = 99;
 const blockDataScope = require('./blocks');
+const weapons = require('./weapons');
+weaponsJSON = {};
 blocksJSON = {};
+
+const initialize = function() {
+  blocksJSON = blockDataScope.blocks();
+  weaponsJSON = weapons.weapons();
+}
+exports.initialize = initialize;
 
 // serialize item data for players
 const serialize = function(slotData) {
   
     // check if item is a block
-    if (blocksJSON[slotData.name] !== undefined) {
+    if (blocksJSON[slotData.name]) {
       slotData.type = "Blocks/";
     } else {
       slotData.type = "Items/";
+    }
+    
+    // check if item is a weapon
+    if (weaponsJSON[slotData.name]) {
+      slotData.type = "Weapons/";
     }
   
 }
@@ -20,6 +33,10 @@ const storeItem = function(inventory, item, count) {
   
 	// stack item to existing slots with item
 	let index = 0;
+  let maxItemCount = defaultMaxItemCount;
+  if (weaponsJSON[item]) {
+    maxItemCount = 1;
+  }
 	inventory.forEach(function(object) {
 		if (object.name == item && object.count < maxItemCount) {
 			if (object.count + count <= maxItemCount) {
@@ -85,7 +102,6 @@ const storeItem = function(inventory, item, count) {
 
 // check how many blocks are in the inventory
 const checkForBlocks = function(inventory) {
-  blocksJSON = blockDataScope.blocks();
   let totalBlocks = 0;
   let totalSolidBlocks = 0;
   let solidBlockSlots = [];

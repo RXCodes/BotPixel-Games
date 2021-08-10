@@ -4,6 +4,7 @@ const hyperPad = require('./jsonsafe');
 const setup = require('./setup');
 var io = setup.io();
 const db = require('./database').db;
+const missions = require('./missions');
 
 // online player accounts
 var players = {};
@@ -62,19 +63,19 @@ const initialize = function() {
 					user = db.collection('usernames').doc(input);
 					let doc = user.get().then(doc => {
 						if (doc.exists) {
-						  callback("error", "Username has been taken.")
+							callback('error', 'Username has been taken.');
 							return;
 						} else {
-						  callback("success", "Username is available.")
+							callback('success', 'Username is available.');
 						}
 					});
-					return "None";
+					return 'None';
 				};
 				let output = pass();
-				if (output !== true && output !== "None") {
+				if (output !== true && output !== 'None') {
 					callback('error', output);
 				}
-				if (output !== "None" && output == true) {
+				if (output !== 'None' && output == true) {
 					callback('success', 'Username is available.');
 				}
 			} else {
@@ -92,27 +93,30 @@ const initialize = function() {
 				if (checkPacket(data, ['username', 'password', 'displayName'])) {
 					let pass = function() {
 						if (data.username.length < 5) {
-						  callback("error", "Provided username is too short.");
+							callback('error', 'Provided username is too short.');
 							return 'Provided username is too short.';
 						}
 						if (data.username.length > 30) {
-						  callback("error", "Provided username is too long.");
+							callback('error', 'Provided username is too long.');
 							return 'Provided username is too long.';
 						}
 						if (data.displayName.length < 3) {
-						  callback("error", "Provided display name is too short.");
+							callback('error', 'Provided display name is too short.');
 							return 'Provided display name is too short.';
 						}
 						if (data.displayName.length > 20) {
-						  callback("error", "Provided display name is too long.");
+							callback('error', 'Provided display name is too long.');
 							return 'Provided display name is too long.';
 						}
 						if (data.password.length < 5) {
-						  callback("error", "Provided password is too short.");
+							callback('error', 'Provided password is too short.');
 							return 'Provided password is too short.';
 						}
 						if (data.password.length > 50) {
-						  callback("error", "Provided password is too long. 50 characters max.")
+							callback(
+								'error',
+								'Provided password is too long. 50 characters max.'
+							);
 							return 'Provided password is too long. 50 characters max.';
 						}
 
@@ -154,7 +158,7 @@ const initialize = function() {
 
 		// login
 		socket.on('login', function(input, callback) {
-			if (socket.secure && isDictionary(input)) {
+			if (socket.secure && isDictionary(input) && !socket.login) {
 				let pass = function() {
 					let data = JSON.parse(input);
 					let user = db.collection('usernames').doc(data.username);
@@ -167,25 +171,33 @@ const initialize = function() {
 							doc = user.get().then(doc => {
 								account = doc.data();
 								if (account.password == data.password) {
-								  if (players[account.uuid] !== undefined) {
-								    io.to(players[account.uuid]).emit("force disconnect", "Your account was logged in from another location.");
-								    try {getSocket(players[account.uuid]).disconnect()}catch(e){};
-								  }
-								  players[account.uuid] = socket.id; 
+								  console.log(players[account.uuid], socket.id);
+									if (players[account.uuid] !== undefined) {
+										io.to(players[account.uuid]).emit(
+											'force disconnect',
+											'Your account was logged in from another location.'
+										);
+										try {
+											getSocket(players[account.uuid]).disconnect();
+										} catch (e) {}
+									}
+
+									players[account.uuid] = socket.id;
 									socket.login = true;
 									socket.uuid = account.uuid;
 									socket.name = account.displayName;
 									socket.accountData = account;
-									callback("success", hyperPad.serialize(account));
+									socket.checkDailyMissions();
+									callback('success', hyperPad.serialize(account));
 									return true;
 								} else {
-								  callback('error', 'Invalid password or username.');
-								  return;
+									callback('error', 'Invalid password or username.');
+									return;
 								}
 							});
 						} else {
-						  callback('error', 'Invalid password or username.');
-						  return;
+							callback('error', 'Invalid password or username.');
+							return;
 						}
 					});
 				};
@@ -195,119 +207,211 @@ const initialize = function() {
 					callback('error', 'Invalid packet sent.');
 				}
 			} else {
-			  callback(
-						'error',
-						'Invalid session. Please update to the newest version or restart the game.'
-					);
+				callback(
+					'error',
+					'Invalid session. Please update to the newest version or restart the game.'
+				);
 			}
 		});
+
+		// fetch daily missions
+		socket.checkDailyMissions = function() {
+			let dayLength = 1000 * 60 * 60 * 24;
+			let currentDay = Math.floor(Date.now() / dayLength);
+			if (socket.accountData.lastLoginDay !== currentDay) {
+				socket.accountData.lastLoginDay = currentDay;
+				socket.accountData.missions = missions.generate();
+				socket.accountData.missionRefresh = (currentDay + 1) * dayLength;
+			}
+		};
 		
+		// satisfy mission
+		socket.satisfyMissions = function(statistics) {
+		  socket.checkDailyMissions();
+		  let missions = socket.accountData.missions;
+		  Object.keys(statistics).forEach(function(stat) {
+		    let amount = statistics[stat];
+		    Object.keys(missions).forEach(function(key) {
+		      if (missions[key].objective == stat) {
+		        missions[key].progress += amount;
+		        if (missions[key].progress >= missions[key].count) {
+		          missions[key].claimable = true;
+		        }
+		      }
+		    });
+		  })
+		}
+		
+		// fetch missions
+		socket.on('fetch missions', function(input, callback) {
+		  if (socket.secure && socket.login) {
+		    socket.checkDailyMissions();
+		    let data = JSON.parse(JSON.stringify(socket.accountData.missions));
+		    data.forEach(function(arr) {
+		      arr.collected = JSON.stringify(arr.collected);
+		      arr.claimable = JSON.stringify(arr.claimable);
+		    });
+		    callback("success", data);
+		  } else {
+		    callback("error", "You are not logged in.");
+		  }
+		});
+		
+		// collect mission rewards
+		socket.on('collect daily mission rewards', function(input, callback) {
+		  if (socket.secure && socket.login) {
+		    socket.checkDailyMissions();
+		    
+		    let currencyAdd = 0;
+		    socket.accountData.missions.forEach(function(mission) {
+		      if (mission.claimable && !mission.collected) {
+		        currencyAdd += mission.reward;
+		        mission.claimable = false;
+		        mission.collected = true;
+		      }
+		    });
+		    if (currencyAdd > 0) {
+		      socket.addCurrency(currencyAdd);
+		      callback("success", "Reward collected.");
+		    } else {
+		      callback("error", "No reward to collect.")
+		    }
+		    
+		  } else {
+		    callback("error", "You are not logged in.");
+		  }
+		});
+		
+		// add currency
+		socket.addCurrency = function(amount) {
+		  socket.accountData.currency += amount;
+		  io.to(socket.id).emit("add currency", hyperPad.serialize({
+		    amount,
+		    currency: socket.accountData.currency
+		  }));
+		}
+
 		// log out
 		socket.on('log out', function(input, callback) {
 			if (socket.secure && socket.login) {
-			  socket.accountData.lastSeen = Date.now() / 1000;
-			  user = db.collection('users').doc(socket.uuid);
-			  user.set(socket.accountData);
-			  delete socket.accountData;
-			  delete players[socket.uuid];
-			  socket.login = false;
-			  socket.uuid = socket.id;
-			  socket.name = "Guest";
+				socket.accountData.lastSeen = Date.now() / 1000;
+				user = db.collection('users').doc(socket.uuid);
+				user.set(socket.accountData);
+				delete socket.accountData;
+				delete players[socket.uuid];
+				socket.login = false;
+				socket.uuid = socket.id;
+				socket.name = 'Guest';
 			}
 		});
-		
-		
-		socket.on("change username", function(input, callback) {
-		  if (socket.login && input.length >= 5 && input.length <= 30) {
-		    let timeDifference = (Date.now() - parseInt(socket.accountData.lastUsernameChange || 0)) / 1000;
-		    if (timeDifference <= 24 * 60 * 60) {
-		      let hours = 24 - Math.floor(timeDifference / (60 * 60));
-		      let s = "";
-		      if (hours !== 1) {
-		        s = "s";
-		      }
-		      callback("error", "Please wait for " + hours + " hour" + s + " to change your username again.");
-		    } else {
-		      user = db.collection('usernames').doc(input);
+
+    // username change
+		socket.on('change username', function(input, callback) {
+			if (socket.login && input.length >= 5 && input.length <= 30) {
+				let timeDifference =
+					(Date.now() - parseInt(socket.accountData.lastUsernameChange || 0)) /
+					1000;
+				if (timeDifference <= 24 * 60 * 60) {
+					let hours = 24 - Math.floor(timeDifference / (60 * 60));
+					let s = '';
+					if (hours !== 1) {
+						s = 's';
+					}
+					callback(
+						'error',
+						'Please wait for ' +
+							hours +
+							' hour' +
+							s +
+							' to change your username again.'
+					);
+				} else {
+					user = db.collection('usernames').doc(input);
 					let doc = user.get().then(doc => {
 						if (doc.exists) {
-						  callback("error", "Provided username has been taken. Try another one.")
+							callback(
+								'error',
+								'Provided username has been taken. Try another one.'
+							);
 							return;
 						} else {
-						  user = db.collection('usernames').doc(socket.accountData.username);
-						  user.delete();
-						  socket.accountData.lastUsernameChange = Date.now();
-						  socket.accountData.username = input;
-						  socket.accountData.lastSeen = Date.now() * 1000;
-	            user = db.collection('users').doc(socket.uuid);
-			        user.set(socket.accountData);
-			        user = db.collection('usernames').doc(input);
-						  user.set({uuid: socket.uuid});
-			        callback("success", "Username has been changed!");
+							user = db
+								.collection('usernames')
+								.doc(socket.accountData.username);
+							user.delete();
+							socket.accountData.lastUsernameChange = Date.now();
+							socket.accountData.username = input;
+							socket.accountData.lastSeen = Date.now() * 1000;
+							user = db.collection('users').doc(socket.uuid);
+							user.set(socket.accountData);
+							user = db.collection('usernames').doc(input);
+							user.set({ uuid: socket.uuid });
+							callback('success', 'Username has been changed!');
 						}
 					});
-		    }
-		  } else {
-		    callback("error", "Invalid session. Please restart the game.")
-		  }
+				}
+			} else {
+				callback('error', 'Invalid session. Please restart the game.');
+			}
 		});
-		
+
 		// update settings
-		socket.on("update settings", function(input, callback) {
-		  if (socket.login) {
-		    socket.accountData.settings = input;
-		    callback("success");
-		  }
+		socket.on('update settings', function(input, callback) {
+			if (socket.login) {
+				socket.accountData.settings = input;
+				callback('success');
+			}
 		});
-		
+
 		// password change
-		socket.on("change password", function(input, callback) {
-		  if (socket.login) {
-		    let pass = function() {
-		      if (input.length < 5) {
-		        callback("error", "Provided password is too short.")
-		        return;
-		      }
-		      if (input.length > 50) {
-		        callback("error", "Provided password is too long. 50 characters max.")
-		        return;
-		      }
-		      socket.accountData.password = input;
-		      user = db.collection('users').doc(socket.uuid);
-			    user.set(socket.accountData);
-			    callback("success", "Password successfully changed!")
-		    }
-		    pass();
-		  } else {
-		    callback("error", "Invalid session. Please restart the game.")
-		  }
+		socket.on('change password', function(input, callback) {
+			if (socket.login) {
+				let pass = function() {
+					if (input.length < 5) {
+						callback('error', 'Provided password is too short.');
+						return;
+					}
+					if (input.length > 50) {
+						callback(
+							'error',
+							'Provided password is too long. 50 characters max.'
+						);
+						return;
+					}
+					socket.accountData.password = input;
+					user = db.collection('users').doc(socket.uuid);
+					user.set(socket.accountData);
+					callback('success', 'Password successfully changed!');
+				};
+				pass();
+			} else {
+				callback('error', 'Invalid session. Please restart the game.');
+			}
 		});
-		
+
 		// backup data when player disconnects
-		socket.on("disconnect", function() {
-		  if (socket.login) {
-		    socket.accountData.lastSeen = Date.now() / 1000;
-			  user = db.collection('users').doc(socket.uuid);
-			  user.set(socket.accountData);
-			  delete players[socket.uuid];
-		  }
+		socket.on('disconnect', function() {
+			if (socket.login) {
+				socket.accountData.lastSeen = Date.now() / 1000;
+				user = db.collection('users').doc(socket.uuid);
+				user.set(socket.accountData);
+				delete players[socket.uuid];
+			}
 		});
-		
 	});
-	
-	// backup account data every minute
+
+	// backup account data every 5 minutes
 	setInterval(function() {
-	  console.log("Backup executed: " + Date.now() / 1000);
-	  Object.keys(io.sockets.connected).forEach(function(socketID) {
-	    socket = io.sockets.connected[socketID];
-	    if (socket.login) {
-	      socket.accountData.lastSeen = Date.now() * 1000;
-	      user = db.collection('users').doc(socket.uuid);
-			  user.set(socket.accountData);
-	    }
-	  });
+		console.log('Backup executed: ' + Date.now() / 1000);
+		Object.keys(io.sockets.connected).forEach(function(socketID) {
+			socket = io.sockets.connected[socketID];
+			if (socket.login) {
+				socket.accountData.lastSeen = Date.now() * 1000;
+				user = db.collection('users').doc(socket.uuid);
+				user.set(socket.accountData);
+			}
+		});
 	}, 60 * 1000 * 5);
-	
 };
 
 exports.initialize = initialize;

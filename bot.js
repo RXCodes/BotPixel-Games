@@ -1,12 +1,19 @@
 world = require('./game');
 const blockDataScope = require('./blocks');
+const weapons = require('./weapons');
 const inventory = require('./inventory');
 const pathfind = require('./pathfind');
 const food = require('./food');
 const foodJSON = food.foodJSON();
-blocksJSON = {};
+var blocksJSON = {};
+var weaponsJSON = {};
 const reach = 5; // radius
 const woodBlocks = ['Oak Log', 'Birch Log'];
+const initialize = function() {
+  blocksJSON = blockDataScope.blocks();
+  weaponsJSON = weapons.weapons();
+};
+exports.initialize = initialize;
 const getBlock = function(block) {
 	return blocksJSON[block] || {};
 };
@@ -48,7 +55,6 @@ var iterate = function(bot, game) {
 		bot.busy = false;
 		bot.holding = 'Pickaxe';
 		bot.lifetimeInt = 0;
-		blocksJSON = blockDataScope.blocks();
 
 		// jump function
 		bot.jump = function() {
@@ -791,6 +797,60 @@ var iterate = function(bot, game) {
 						itemsToTake.push(slot);
 					}
 				}
+
+        // take a weapon
+        if (weaponsJSON[slotData.name]) {
+
+          // check if the weapon is better than what the player currently has
+          let selectedWeaponPower = 0;
+          let weaponSlotID = undefined;
+          let weaponInventoryIndex = 0;
+          let selectedWeaponType = weaponsJSON[slotData.name].type;
+          bot.inventory.forEach(function(item) {
+            if ((weaponsJSON[item.name] || {}).type == selectedWeaponType) {
+              switch(selectedWeaponType) {
+                case "Melee":
+                  currentWeaponPower = (1 / weaponsJSON[item.name].attackSpeed) * weaponsJSON[item.name].damage;
+                  break;
+                case "Firearm":
+                  currentWeaponPower = (1 / weaponsJSON[item.name].firingRate) * weaponsJSON[item.name].damage;
+                case "Throwable":
+                  currentWeaponPower = weaponsJSON[item.name].damage * weaponsJSON[item.name].range;
+                  break;
+              }
+              currentWeaponPower = parseInt(currentWeaponPower) || 0;
+              selectedWeaponPower = Math.max(currentWeaponPower, selectedWeaponPower);
+              weaponSlotID = weaponInventoryIndex;
+            }
+            weaponInventoryIndex++;
+          });
+          let weaponPower = weaponsJSON[slotData.name].range * weaponsJSON[slotData.name].damage;
+          if (selectedWeaponPower < weaponPower) {
+            itemsToTake.push(slot);
+            if (weaponSlotID) {
+              bot.dropItem(weaponSlotID);
+            }
+
+            // drop blocks if weapon cannot be picked up
+            if (bot.inventory.length < 7) {
+              let slotToDrop = 0;
+              let currentSlot = 0;
+              let blockCount = 999;
+              bot.inventory.forEach(function(item) {
+                if (item.type == "Blocks/" && item.count < blockCount) {
+                  blockCount = item.count;
+                  slotToDrop = currentSlot;
+                }
+                if (item.type == "Items/") {
+                  slotToDrop = currentSlot;
+                }
+                currentSlot++;
+              });
+              bot.dropItem(currentSlot);
+            }
+          }
+
+        }
 				
 				// take desired valuables
 				if ((blocksJSON[slotData.name] || {}).priority) {
@@ -801,7 +861,7 @@ var iterate = function(bot, game) {
 				
 			});
 
-			// pick random item
+			// pick random item to grab
 			if (itemsToTake.length == 0) {
 				bot.finishLooting = true;
 			} else {
@@ -903,7 +963,7 @@ var iterate = function(bot, game) {
 			}
 		});
 
-		// flight of fight response
+		// flight or fight response
 		let response = 'Flee';
 		if (targetPlayer !== undefined) {
 			if (bot.health > 50 || combatRadiusUsed) {
@@ -947,9 +1007,28 @@ var iterate = function(bot, game) {
 					if (Math.abs(bot.targetPlayer.y - bot.y) <= 1) {
 						bot.jump();
 					}
-					bot.mining = true;
+          let hasMelee = false;
+          let currentSlotIndex = 0;
+          let meleeSlotIndex = 0;
+          bot.inventory.forEach(function(item) {
+            if (item.type == "Weapons/") {
+              if (weaponsJSON[item.name]) {
+                hasMelee = true;
+                meleeSlotIndex = currentSlotIndex;
+              }
+              currentSlotIndex;
+            }
+          });
+          if (!hasMelee) {
+					  bot.mining = true;
+          } else {
+            bot.startAttack(meleeSlotIndex);
+          }
 				}
 			}
+      if (!bot.mining || !bot.attacking) {
+        bot.stopAttack();
+      }
 		} else {
 			if (Math.random() < 0.5) {
 				bot.status = 'Mining';

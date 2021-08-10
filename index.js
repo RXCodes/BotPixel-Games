@@ -6,6 +6,8 @@ const setup = require('./setup');
 require('./database').initialize();
 require('./accounts').initialize();
 require('./rooms').initialize();
+require('./inventory').initialize();
+require('./bot').initialize();
 io = setup.io();
 
 // load custom-created modules
@@ -15,8 +17,11 @@ const gameHandler = require('./game');
 const blockData = require('./blocks');
 const crateLoot = require('./crateloot');
 const hyperPad = require('./jsonsafe');
+const worldgen = require('./worldgen');
 const food = require('./food');
 const foodJSON = food.foodJSON();
+const weapons = require('./weapons');
+const weaponData = weapons.weapons();
 crateLoot.setup();
 gameHandler.initialize();
 
@@ -66,7 +71,9 @@ const generateBotName = function() {
 // socket.io events
 io.on('connection', function(socket) {
 	// initialize variables
-	io.to(socket.id).emit('connected', JSON.stringify(Date.now() / 1000));
+	io.to(socket.id).emit('connected', "connected");
+	io.to(socket.id).emit('default world gen', worldgen.defaultWorldSettings());
+  io.to(socket.id).emit('weapon data', weaponData);
 	socket.uuid = socket.id;
 	socket.matchmaking = false;
 	socket.ingame = false;
@@ -75,9 +82,9 @@ io.on('connection', function(socket) {
 	socket.on('verify', function(input, callback) {
 		if (input == secret) {
 			socket.secure = true;
-			callback("success");
+			callback('success');
 		} else {
-		  callback("error");
+			callback('error');
 		}
 	});
 
@@ -85,7 +92,7 @@ io.on('connection', function(socket) {
 		if (input.length >= 3 && input.length <= 20) {
 			socket.name = input;
 			if (socket.login) {
-			  socket.accountData.displayName = input;
+				socket.accountData.displayName = input;
 			}
 		}
 	});
@@ -162,12 +169,20 @@ io.on('connection', function(socket) {
 		if (isDictionary(packet) && socket.ingame) {
 			let parsedPacket = JSON.parse(packet);
 			if (checkPacket(parsedPacket, ['x', 'y'])) {
-				gameHandler.destroyBlockEvent(
-					parseInt(parsedPacket.x),
-					parseInt(parsedPacket.y),
-					socket.id,
-					socket.room
-				);
+				if (!socket.creative) {
+					gameHandler.destroyBlockEvent(
+						parseInt(parsedPacket.x),
+						parseInt(parsedPacket.y),
+						socket.id,
+						socket.room
+					);
+				} else {
+					gameHandler.destroyBlock(
+						socket.room,
+						parseInt(parsedPacket.x),
+						parseInt(parsedPacket.y)
+					);
+				}
 			}
 			let inv = gameHandler.updateInventory(socket.room, socket.id);
 			io.to(socket.id).emit('update inventory', JSON.stringify(inv));
@@ -178,13 +193,22 @@ io.on('connection', function(socket) {
 		if (isDictionary(packet) && socket.ingame) {
 			let parsedPacket = JSON.parse(packet);
 			if (checkPacket(parsedPacket, ['x', 'y', 'slotID'])) {
-				gameHandler.placeBlockEvent(
-					parseInt(parsedPacket.x),
-					parseInt(parsedPacket.y),
-					parseInt(parsedPacket.slotID),
-					socket.id,
-					socket.room
-				);
+				if (!socket.creative) {
+					gameHandler.placeBlockEvent(
+						parseInt(parsedPacket.x),
+						parseInt(parsedPacket.y),
+						parseInt(parsedPacket.slotID),
+						socket.id,
+						socket.room
+					);
+				} else {
+					gameHandler.placeBlock(
+						socket.room,
+						parseInt(parsedPacket.x),
+						parseInt(parsedPacket.y),
+						parsedPacket.block
+					);
+				}
 			}
 			callback(parsedPacket.x + ',' + parsedPacket.y);
 		}
@@ -196,6 +220,7 @@ io.on('connection', function(socket) {
 				name: packet
 			});
 			gameHandler.registerAnimation(socket.room, socket.id, packet);
+      callback("done");
 		}
 	});
 	socket.on('start mine', function(packet, callback) {
@@ -206,16 +231,19 @@ io.on('connection', function(socket) {
 				io.to(socket.room).emit('Mine', parsedPacket);
 			}
 		}
+    callback("done");
 	});
 	socket.on('bot debug', function(packet, callback) {
 		if (socket.ingame) {
 			socket.join(socket.room + '-debug');
 		}
+    callback("done");
 	});
 	socket.on('cancel mine', function(packet, callback) {
 		if (socket.ingame) {
 			io.to(socket.room).emit('Cancel Mine', { uuid: socket.uuid });
 		}
+    callback("done");
 	});
 
 	// get timestamp
@@ -228,6 +256,11 @@ io.on('connection', function(socket) {
 		callback(blockData.get());
 	});
 
+	// fetch default world gen data
+	socket.on('get default world gen', function(packet, callback) {
+		callback(worldgen.defaultWorldSettings());
+	});
+
 	// fetch food data
 	socket.on('get food data', function(packet, callback) {
 		callback(foodJSON);
@@ -235,11 +268,11 @@ io.on('connection', function(socket) {
 
 	// initiating matchmaking
 	socket.on('matchmake', function(packet, callback) {
-	  socket.matchmake(packet, callback);
+		socket.matchmake(packet, callback);
 	});
-	
+
 	// matchmake function
-	socket.matchmake = function(packet, callback = function(){}) {
+	socket.matchmake = function(packet, callback = function() {}) {
 		if (socket.secure) {
 			let matchmake = function() {
 				let parsedPacket = JSON.parse(packet);
@@ -252,7 +285,7 @@ io.on('connection', function(socket) {
 					);
 					queneCache[parsedPacket.mode] = {};
 					Object.keys(parsedPacket).forEach(function(key) {
-					  queneCache[parsedPacket.mode][key] = parsedPacket[key];
+						queneCache[parsedPacket.mode][key] = parsedPacket[key];
 					});
 
 					// random chance to have bots
@@ -280,12 +313,14 @@ io.on('connection', function(socket) {
 					'update count',
 					Object.keys(quene[parsedPacket['mode']]).length
 				);
-				callback(hyperPad.serialize({
-					players: Object.keys(quene[parsedPacket['mode']]).length,
-					quene: Object.keys(quene[parsedPacket['mode']]),
-					id: queneCurrent[parsedPacket['mode']],
-					capacity: queneCapacity[parsedPacket['mode']] || 10
-				}));
+				callback(
+					hyperPad.serialize({
+						players: Object.keys(quene[parsedPacket['mode']]).length,
+						quene: Object.keys(quene[parsedPacket['mode']]),
+						id: queneCurrent[parsedPacket['mode']],
+						capacity: queneCapacity[parsedPacket['mode']] || 10
+					})
+				);
 			};
 			if (isDictionary(packet) && !socket.matchmaking && !socket.ingame) {
 				let parsedPacket = JSON.parse(packet);
@@ -294,7 +329,7 @@ io.on('connection', function(socket) {
 				}
 			}
 		}
-	}
+	};
 
 	// cancel matchmaking
 	let cancelMatchmake = function(reason) {
@@ -311,6 +346,7 @@ io.on('connection', function(socket) {
 	};
 	socket.on('cancel matchmake', function(packet, callback) {
 		cancelMatchmake('Matchmaking was cancelled.');
+    callback("done");
 	});
 
 	socket.on('disconnect', function(packet, callback) {
@@ -384,28 +420,33 @@ const matchmake = function() {
 			});
 			if (start) {
 				const startGame = function(roomData) {
-				  setTimeout(function() {
-					let world = worldGen.generateWorld();
-					let matchmakeData = gameHandler.startMatch(world, roomUUID, ids, roomData);
-					Object.keys(matchmakeData.positions).forEach(function(id) {
-						io.to(id).emit('start position', matchmakeData.positions[id]);
-						getSocket(id).ingame = true;
-						getSocket(id).matchmaking = false;
-						getSocket(id).host = false;
-					});
-					io.to(roomUUID).emit(
-						'open world',
-						hyperPad.serialize(world.world),
-						world.chunks,
-						hyperPad.serialize(world.crateLoot)
-					);
-					io.to(roomUUID).emit('loot', hyperPad.serialize(world.crateLoot));
-					io.to(roomUUID).emit('player count', JSON.stringify(ids.length));
-				  }, 1000);
-				}
+					setTimeout(function() {
+						let world = worldGen.generateWorld();
+						let matchmakeData = gameHandler.startMatch(
+							world,
+							roomUUID,
+							ids,
+							roomData
+						);
+						Object.keys(matchmakeData.positions).forEach(function(id) {
+							io.to(id).emit('start position', matchmakeData.positions[id]);
+							getSocket(id).ingame = true;
+							getSocket(id).matchmaking = false;
+							getSocket(id).host = false;
+						});
+						io.to(roomUUID).emit(
+							'open world',
+							hyperPad.serialize(world.world),
+							world.chunks,
+							hyperPad.serialize(world.crateLoot)
+						);
+						io.to(roomUUID).emit('loot', hyperPad.serialize(world.crateLoot));
+						io.to(roomUUID).emit('player count', JSON.stringify(ids.length));
+					}, 1000);
+				};
 				let meta = false;
 				if (queneCache[key].customRoom) {
-				  meta = queneCache[key].meta;
+					meta = queneCache[key].meta;
 				}
 				startGame(meta);
 			}

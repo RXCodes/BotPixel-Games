@@ -25,13 +25,13 @@ const defaultWorldSettings = {
 	woodCrateGapRange: 5,
 	dungeonCount: 5,
 	dungeonSpawnLayer: 10,
-	caveTypes: ['Limestone', 'Overgrown', 'Clay'],
+	caveTypes: ['Limestone'],
 	caveBiomeChance: 0.8,
 	minStalagtiteLength: 2,
 	stalagtiteLengthRange: 4,
 	extendedStalagtiteChance: 0.4,
 	limestoneRockFormationChance: 0.35,
-	limestoneCaveClayFloorIntegrity: 0.15,
+	limestoneCaveClayFloorIntegrity: 0.25,
 	limestoneCaveCrateChance: 0.2,
 	mushroomSpawnRate: 0.3,
 	vegetationSpawnRate: 0.4,
@@ -41,7 +41,10 @@ const defaultWorldSettings = {
 const blockDataScope = require('./blocks');
 const crates = require('./crateloot');
 var blocksJSON = {};
-
+const defaultSettings = function() {
+  return defaultWorldSettings;
+}
+exports.defaultWorldSettings = defaultSettings;
 const distance = function(x, y, x2, y2) {
 	xDelta = (x2 - x) * (x2 - x);
 	yDelta = (y2 - y) * (y2 - y);
@@ -578,16 +581,16 @@ var generateWorld = function(
 					  if (Math.random() < 0.75) {
 					    placeBlock(x, floorPos, "Iron Crate");
 					    let loot = crates.generateLoot(4 + Math.round(Math.random() * 4));
-					    fillCrate(x, floorPos + 1, loot)
+					    fillCrate(x, floorPos, loot)
 					  } else {
-					    placeBlock(x, floorPos + 2, "Gold Crate");
-					    placeBlock(x, floorPos + 1, "Limestone Table");
+					    placeBlock(x, floorPos + 1, "Gold Crate");
+					    placeBlock(x, floorPos, "Limestone Table");
 					    let loot = crates.generateLoot(8 + Math.round(Math.random() * 4));
-					    fillCrate(x, floorPos + 2, loot)
+					    fillCrate(x, floorPos + 1, loot)
 					  }
 					}
-				  if (Math.random() < settings.limestoneCaveClayFloorIntegrity && floor) {
-					  setRadius(x, floorPos - 1, "Clay", 4, "Solid");
+				  if (Math.random() < settings.limestoneCaveClayFloorIntegrity) {
+					  setRadius(x, floorPos - 1, "Clay", 3.5, "Solid");
 					}
 				}
 			});
@@ -695,7 +698,7 @@ var generateWorld = function(
 					  }
 					}
 				  if (Math.random() < settings.limestoneCaveClayFloorIntegrity && floor) {
-					  setRadius(x, floorPos - 1, "Clay", 4, "Solid");
+					  setRadius(x, floorPos - 1, 3, "Clay", "Solid");
 					}
 				}
 			});

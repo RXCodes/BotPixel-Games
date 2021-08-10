@@ -9,12 +9,22 @@ const maxItemLifetime = 30;
 const maxItemEntities = 50;
 const worldHeightLimit = 100;
 const food = require('./food');
+const weapons = require('./weapons');
+const hyperPad = require('./jsonsafe');
+var weaponsJSON = {};
 var foodJSON = {};
+var blocksJSON = {};
 const initializeScript = function() {
+	weaponsJSON = weapons.weapons();
 	foodJSON = food.foodJSON();
+	blocksJSON = blockDataScope.blocks();
 };
 exports.initialize = initializeScript;
-blocksJSON = {};
+
+// reference a socket by id
+const getSocket = function(id) {
+	return io.sockets.connected[id] || {};
+};
 const getBlock = function(block) {
 	return blocksJSON[block] || {};
 };
@@ -126,21 +136,23 @@ const referPlayer = function(worldUUID, uuid) {
 
 // default room settings
 const defaultSettings = {
-  classic: true,
-  shrinkingPlayzone: true,
-  autofillBots: true
-}
+	classic: true,
+	shrinkingPlayzone: true,
+	autofillBots: true,
+	disablePVP: false,
+	disastersEnabled: true,
+	explosionGrief: true
+};
 
 // start match
 startMatch = function(world, uuid, players, settings) {
 	endMatch(games[uuid]);
 	if (!settings) {
-	  settings = defaultSettings;
+		settings = defaultSettings;
 	}
 
-	blocksJSON = blockDataScope.blocks();
 	games[uuid] = {
-	  settings: settings,
+		settings: settings,
 		world: world.world,
 		collisions: world.collisions,
 		interests: world.interests,
@@ -156,6 +168,7 @@ startMatch = function(world, uuid, players, settings) {
 		entities: [],
 		crateLoot: world.crateLoot,
 		blockCost: world.blockCost,
+		currentDisasterEvents: {},
 		explode: function(x, y, radius, parent = 'None') {
 			let world = this.world;
 			io.to(this.uuid).emit('Explode', x, y, radius);
@@ -200,32 +213,34 @@ startMatch = function(world, uuid, players, settings) {
 			});
 
 			// destroy blocks
-			for (xOffset = -radius; xOffset <= radius; xOffset++) {
-				for (yOffset = -radius; yOffset <= radius; yOffset++) {
-					let distance = xOffset ** 2 + yOffset ** 2;
-					if (distance <= radius ** 2) {
-						let block =
-							world[
-								Math.round(parseInt(x) + xOffset) +
-									',' +
-									Math.round(parseInt(y) + yOffset)
-							];
-						if (block && block !== 'Bedrock') {
-							destroyBlock(
-								this.uuid,
-								Math.round(parseInt(x) + xOffset),
-								Math.round(parseInt(y) + yOffset),
-								'Explosion'
-							);
-						}
-						// summon tnt via explosion
-						if (block == 'TNT') {
-							chainTNT(
-								this.uuid,
-								Math.round(parseInt(x) + xOffset),
-								Math.round(parseInt(y) + yOffset),
-								parent
-							);
+			if (this.settings.explosionGrief) {
+				for (xOffset = -radius; xOffset <= radius; xOffset++) {
+					for (yOffset = -radius; yOffset <= radius; yOffset++) {
+						let distance = xOffset ** 2 + yOffset ** 2;
+						if (distance <= radius ** 2) {
+							let block =
+								world[
+									Math.round(parseInt(x) + xOffset) +
+										',' +
+										Math.round(parseInt(y) + yOffset)
+								];
+							if (block && block !== 'Bedrock') {
+								destroyBlock(
+									this.uuid,
+									Math.round(parseInt(x) + xOffset),
+									Math.round(parseInt(y) + yOffset),
+									'Explosion'
+								);
+							}
+							// summon tnt via explosion
+							if (block == 'TNT') {
+								chainTNT(
+									this.uuid,
+									Math.round(parseInt(x) + xOffset),
+									Math.round(parseInt(y) + yOffset),
+									parent
+								);
+							}
 						}
 					}
 				}
@@ -238,12 +253,23 @@ startMatch = function(world, uuid, players, settings) {
 			this.zoneActive = false;
 			this.pvp = false;
 			this.gameEnd = true;
+			this.disasterStart = false;
 			io.to(player.uuid).emit('Victory', 'Last Player Standing!');
 			io.to(uuid).emit('Declare Win', {
 				uuid: player.uuid,
 				name: player.name,
 				endTime: Date.now() / 1000 + 60
 			});
+			player.stats.survivalDuration = (Date.now() - this.startingTime) / 1000;
+			player.stats.survivalTimeMinutes =
+				(Date.now() - this.startingTime) / (1000 * 60);
+			player.addToStat('matches', 1);
+			player.addToStat('wins', 1);
+			if (!this.settings.customRoom) {
+				try {
+					getSocket(player.uuid).satisfyMissions(player.stats);
+				} catch (e) {}
+			}
 			setTimeout(function() {
 				endMatch(uuid);
 			}, 60 * 1000);
@@ -282,6 +308,60 @@ startMatch = function(world, uuid, players, settings) {
 			alive: true,
 			eating: false,
 			eatTimer: undefined,
+      attacking: false,
+      stopAttack: function() {
+        if (this.attacking) {
+          this.attacking = false;
+          io.to(this.worldUUID).emit("animation", {
+            name: "stop mine animation",
+            uuid: this.uuid
+          });
+        }
+      },
+      whileAttack: function() {
+        if (this.attacking) {
+          if (this.inventory[this.attackingSlot]) {
+            if (this.inventory[this.attackingSlot].type == "Weapons/") {
+              let weapon = weaponsJSON[this.inventory[this.attackingSlot].name];
+              if (weapon.type == "Melee") {
+                let xOffset = weapon.xOffset;
+                if (this.xFlip !== 1) {
+                  xOffset *= -1;
+                }
+                this.meleeAttack(this.inventory[this.attackingSlot].name, weapon.damage, weapon.xBound, weapon.yBound, xOffset, weapon.yOffset, weapon.attackSpeed);
+              }
+            } else {
+              this.attacking = false;
+              this.stopAttack();
+            }
+          } else {
+            this.attacking = false;
+            this.stopAttack();
+          }
+        }
+      },
+      startAttack: function(slot) {
+        if (!this.attacking) {
+          if (this.inventory[slot] !== undefined) {
+            if (this.inventory[slot].type == "Weapons/") {
+              let weapon = weaponsJSON[this.inventory[slot].name];
+              this.attacking = true;
+              if (weapon.type == "Melee") {
+                let uuid = this.uuid;
+                io.to(this.worldUUID).emit("animation", {
+                  name: "/meleeAttack " + weapon.name,
+                  uuid
+                });
+              }
+              this.attackingSlot = slot;
+            }
+          }
+        } 
+      },
+			addToStat: function(stat, amount) {
+				this.stats[stat] = this.stats[stat] || 0;
+				this.stats[stat] += amount;
+			},
 			startEat: function(slot) {
 				if (this.inventory[slot] && slot >= 0) {
 					if (foodJSON[this.inventory[slot].name] !== undefined) {
@@ -294,19 +374,19 @@ startMatch = function(world, uuid, players, settings) {
 						let item = this.inventory[slot].name;
 						let player = this;
 						this.eatTimer = setTimeout(function() {
-						  if (player.alive) {
-							io.to(player.worldUUID).emit('Stop Eat', player.uuid);
-							player.addToHealth((foodJSON[player.eating] || {}).heal || 0, {
-								type: 'Heal'
-							});
-							player.eating = false;
-							player.inventory = inventory.remove(
-								player.inventory,
-								player.eatingSlot,
-								1
-							).inventory;
-							io.to(player.uuid).emit('update inventory', player.inventory);
-						  }
+							if (player.alive) {
+								io.to(player.worldUUID).emit('Stop Eat', player.uuid);
+								player.addToHealth((foodJSON[player.eating] || {}).heal || 0, {
+									type: 'Heal'
+								});
+								player.eating = false;
+								player.inventory = inventory.remove(
+									player.inventory,
+									player.eatingSlot,
+									1
+								).inventory;
+								io.to(player.uuid).emit('update inventory', player.inventory);
+							}
 						}, foodJSON[item].eatDuration * 1000);
 					}
 				}
@@ -356,10 +436,13 @@ startMatch = function(world, uuid, players, settings) {
 						if (getBlock(item.name).breakDuration) {
 							type = 'Blocks/';
 						}
+            if (weaponsJSON[item.name]) {
+              type = "Weapons/";
+            }
 						let coordinates = position.split(',');
 						io.to(this.worldUUID).emit('Pick Up Item', {
-							x: coordinates[0],
-							y: coordinates[1],
+							x: JSON.stringify(coordinates[0]),
+							y: JSON.stringify(coordinates[1]),
 							type,
 							item: item.name,
 							uuid: this.uuid
@@ -420,6 +503,14 @@ startMatch = function(world, uuid, players, settings) {
 							effect,
 							uuid
 						});
+						if (event.type == 'Player' && event.uuid !== this.uuid) {
+							if (referPlayer(this.worldUUID, event.uuid).alive) {
+								referPlayer(this.worldUUID, event.uuid).addToStat(
+									'damage',
+									-add
+								);
+							}
+						}
 					}
 					if (this.type == 'Player') {
 						io.to(this.uuid).emit('Health Update', {
@@ -427,6 +518,9 @@ startMatch = function(world, uuid, players, settings) {
 							change: add,
 							hp: this.health
 						});
+						if (add > 0) {
+							this.addToStat('heal', add);
+						}
 					} else {
 						if (event.type == 'Player') {
 							let player = referPlayer(this.worldUUID, event.uuid);
@@ -438,21 +532,38 @@ startMatch = function(world, uuid, players, settings) {
 						}
 					}
 					if (this.health == 0) {
+						let playerUUID = this.uuid;
+						games[this.worldUUID].playerObjects.forEach(function(player) {
+							if (player !== playerUUID) {
+								player.addToStat('outlived', 1);
+							}
+						});
 						if (this.type == 'Player') {
 							this.stats.survivalDuration =
 								(Date.now() - this.startingTime) / 1000;
+							this.stats.survivalTimeMinutes =
+								(Date.now() - this.startingTime) / (1000 * 60);
+							this.addToStat('matches', 1);
 							io.to(this.uuid).emit('death', {
 								timestamp: Date.now(),
-								stats: this.stats,
 								rank: games[this.worldUUID].playerObjects.length,
 								data: event
 							});
+							if (!games[this.worldUUID].settings.customRoom) {
+								try {
+									getSocket(this.uuid).satisfyMissions(this.stats);
+								} catch (e) {}
+							}
 						}
 						if (event.type == 'Player' && event.uuid !== this.uuid) {
 							if (referPlayer(this.worldUUID, event.uuid).alive) {
-								referPlayer(this.worldUUID, event.uuid).stats.kills =
-									(referPlayer(this.worldUUID, event.uuid).stats.kills || 0) +
-									1;
+								referPlayer(this.worldUUID, event.uuid).addToStat('kills', 1);
+								if (event.weapon == 'TNT Explosion') {
+									referPlayer(this.worldUUID, event.uuid).addToStat(
+										'explodedEnemies',
+										1
+									);
+								}
 								kills = referPlayer(this.worldUUID, event.uuid).stats.kills;
 								io.to(event.uuid).emit('Kill', {
 									count: kills,
@@ -469,7 +580,7 @@ startMatch = function(world, uuid, players, settings) {
 						let uuid = this.uuid;
 						let name = this.name;
 						io.to(worldUUID).emit('death announce', {
-							playersLeft: games[worldUUID].playerObjects.length - 1,
+							playersLeft: JSON.stringify(games[worldUUID].playerObjects.length - 1),
 							cause: event,
 							uuid,
 							name
@@ -670,6 +781,7 @@ const runGame = function(game) {
 	let playerMovePacket = [];
 	let requireKeys = ['x', 'y', 'uuid', 'health', 'xFlip', 'name'];
 	game.playerObjects.forEach(function(player) {
+    player.whileAttack();
 		if (player.type == 'Bot') {
 			botFunction.iterate(player, game);
 		}
@@ -682,8 +794,12 @@ const runGame = function(game) {
 		});
 		playerMovePacket.push(packet);
 	});
-	if (game.matchBegins < Date.now()) {
+	if (game.matchBegins < Date.now() && !game.settings.creative) {
 		match(game);
+	} else {
+	  if (game.playerObjects.length == 0) {
+	    endMatch(game.uuid);
+	  }
 	}
 
 	// entities
@@ -797,6 +913,9 @@ const runGame = function(game) {
 					if (getBlock(item.item).breakDuration) {
 						type = 'Blocks/';
 					}
+          if (weaponsJSON[item.item]) {
+            type = "Weapons/";
+          }
 					pushEvent(game.uuid, 'Pick Up Item', {
 						x: item.x,
 						y: item.y,
@@ -808,7 +927,7 @@ const runGame = function(game) {
 					io.to(player.uuid).emit('update inventory', player.inventory);
 				}
 				if (give.leftOver > 0 && give.success) {
-					summonItem(world.uuid, player.x, player.y, item.item, give.leftOver);
+					summonItem(player.worldUUID, player.x, player.y, item.item, give.leftOver);
 				}
 				if (!give.success) {
 					itemsArray.push(item);
@@ -883,7 +1002,12 @@ const destroyBlock = function(worldUUID, x, y, uuid = 'bot') {
 		delete games[worldUUID].crateLoot[position];
 		delete games[worldUUID].blockCost[position];
 	}
-	games[worldUUID].world = blockUpdate.update(x, y, games[worldUUID].world, worldUUID);
+	games[worldUUID].world = blockUpdate.update(
+		x,
+		y,
+		games[worldUUID].world,
+		worldUUID
+	);
 	updateChunk(worldUUID, x, y);
 };
 
@@ -905,7 +1029,12 @@ const placeBlock = function(worldUUID, x, y, block, blockData = {}) {
 		games[worldUUID].collisions[position] = true;
 		games[worldUUID].blockCost[position] = blocksJSON[block].blockCost;
 	}
-	games[worldUUID].world = blockUpdate.update(x, y, games[worldUUID].world, worldUUID);
+	games[worldUUID].world = blockUpdate.update(
+		x,
+		y,
+		games[worldUUID].world,
+		worldUUID
+	);
 	updateChunk(worldUUID, x, y);
 };
 
@@ -933,10 +1062,16 @@ const movePlayer = function(uuid, player, packet) {
 
 // summon an item at a given position
 const summonItem = function(uuid, x, y, item, count) {
+  if (!games[uuid]) {
+    return;
+  }
 	let type = 'Blocks/';
 	if (blocksJSON[item] == undefined) {
 		type = 'Items/';
 	}
+  if (weaponsJSON[item]) {
+    type = 'Weapons/';
+  }
 	let itemData = {
 		x: x + (Math.random() - 0.5) * 0.3,
 		y,
@@ -946,7 +1081,7 @@ const summonItem = function(uuid, x, y, item, count) {
 		id: generateUUID(),
 		type
 	};
-	if (games[uuid].itemEntities.length >= maxItemEntities) {
+	if ((games[uuid] || {}).itemEntities.length >= maxItemEntities) {
 		pushEvent(
 			games.uuid,
 			'Delete Item',
@@ -979,6 +1114,7 @@ const destroyBlockEvent = function(x, y, playerUUID, worldUUID) {
 		blockData = blocksJSON[games[worldUUID].world[x + ',' + y]];
 		if (blockData !== undefined) {
 			if (blockData.drops !== undefined) {
+				player.addToStat('blocksDestroyed', 1);
 				const givePlayer = function(item, count) {
 					let give = inventory.give(player.inventory, item, count);
 					player.inventory = give.inventory;
@@ -987,6 +1123,9 @@ const destroyBlockEvent = function(x, y, playerUUID, worldUUID) {
 						if (getBlock(item).breakDuration) {
 							type = 'Blocks/';
 						}
+            if (weaponsJSON[item]) {
+              type = 'Weapons/'
+            }
 						io.to(worldUUID).emit('Pick Up Item', {
 							x,
 							y,
@@ -1060,6 +1199,7 @@ const placeBlockEvent = function(x, y, slotID, playerUUID, worldUUID) {
 			player.inventory.splice(slotID, 1);
 		}
 		placeBlock(worldUUID, x, y, slot.name);
+		player.addToStat('blocksPlaced', 1);
 
 		return { success: true };
 	}
@@ -1074,6 +1214,9 @@ const registerAnimation = function(room, uuid, input) {
 	}
 	if (input == 'stop mine animation') {
 		referPlayer(room, uuid).mining = false;
+    if (referPlayer(room, uuid).alive) {
+		  referPlayer(room, uuid).stopAttack();
+	  }
 	}
 	if (referPlayer(room, uuid).alive) {
 		referPlayer(room, uuid).cancelEat();
@@ -1088,7 +1231,19 @@ io.on('connection', function(socket) {
 				referPlayer(socket.room, socket.id).dropItem(parseInt(input));
 			}
 		}
+    callback("done");
 	});
+  socket.on("weapon attack", function(input, callback) {
+    if (socket.ingame && isDictionary(input)) {
+			if (referPlayer(socket.room, socket.id).alive) {
+				let parsedInput = JSON.parse(input);
+				referPlayer(socket.room, socket.id).startAttack(
+          parseInt(parsedInput.slot)
+        );
+			}
+		}
+    callback("done");
+  });
 	socket.on('Crate Deposit', function(input, callback) {
 		if (socket.ingame && isDictionary(input)) {
 			if (referPlayer(socket.room, socket.id).alive) {
@@ -1100,6 +1255,7 @@ io.on('connection', function(socket) {
 				);
 			}
 		}
+    callback("done");
 	});
 	socket.on('Crate Collect', function(input, callback) {
 		if (socket.ingame && isDictionary(input)) {
@@ -1111,6 +1267,7 @@ io.on('connection', function(socket) {
 				);
 			}
 		}
+    callback("done");
 	});
 	socket.on('TNT Ignite', function(input, callback) {
 		if (socket.ingame) {
@@ -1118,6 +1275,7 @@ io.on('connection', function(socket) {
 				referPlayer(socket.room, socket.id).igniteTNT(input);
 			}
 		}
+    callback("done");
 	});
 	socket.on('Eat', function(input, callback) {
 		if (socket.ingame) {
@@ -1125,12 +1283,28 @@ io.on('connection', function(socket) {
 				referPlayer(socket.room, socket.id).startEat(parseInt(input));
 			}
 		}
+    callback("done");
 	});
 	socket.on('Cancel Eat', function(input, callback) {
 		if (socket.ingame) {
 			if (referPlayer(socket.room, socket.id).alive) {
 				referPlayer(socket.room, socket.id).cancelEat();
 			}
+		}
+    callback("done");
+	});
+	socket.on('send chat message', function(input, callback) {
+		if (socket.ingame) {
+			io.to(socket.room).emit("in-game chat message", {
+			  uuid: socket.id,
+			  msg: input
+			});
+		}
+    callback("done");
+	});
+	socket.on('disconnect', function() {
+		if (socket.ingame && socket.creative) {
+		  referPlayer(socket.room, socket.id).addToHealth(-9999, "Disconnection");
 		}
 	});
 });
@@ -1271,20 +1445,39 @@ const match = function(game) {
 	};
 
 	// initiate grace period
-	if (!game.gracePeriod && Date.now() - game.startTime >= 1000 * 30) {
+	if (
+		!game.gracePeriod &&
+		Date.now() - game.startTime >= 1000 * 30 &&
+		!game.settings.disablePVP
+	) {
 		game.gracePeriod = Date.now() + 30 * 1000;
 		pushEvent(game.uuid, 'Grace Period', game.gracePeriod / 1000);
 	} else {
-		if (game.gracePeriod < Date.now() && !game.pvp && !game.gameEnd) {
+		if (
+			game.gracePeriod < Date.now() &&
+			!game.pvp &&
+			!game.gameEnd &&
+			!game.settings.disablePVP
+		) {
 			pushEvent(game.uuid, 'Grace Period End', {});
 			game.zoneIteration = 1;
 			if (game.settings.shrinkingPlayzone) {
-		    game.timer = setTimeout(function() {
-			   	nextZone();
-	     	}, 8 * 1000);
+				game.timer = setTimeout(function() {
+					nextZone();
+				}, 8 * 1000);
 			}
 			game.currentDisasterEvents = {};
 			game.pvp = true;
+			game.disasterStart = true;
+		}
+	}
+
+	if (game.settings.disablePVP && game.settings.shrinkingPlayzone && !game.disasterStart && !game.gameEnd) {
+		if (game.settings.shrinkingPlayzone) {
+			game.timer = setTimeout(function() {
+				nextZone();
+			}, 8 * 1000);
+			game.disasterStart = true;
 		}
 	}
 
@@ -1309,7 +1502,7 @@ const match = function(game) {
 	};
 
 	// disaster function
-	if (game.pvp) {
+	if (game.disasterStart && game.settings.disastersEnabled) {
 		Object.keys(game.currentDisasterEvents).forEach(function(event) {
 			let eventData = game.currentDisasterEvents[event];
 			if (!eventData.triggered && eventData.start <= Date.now()) {

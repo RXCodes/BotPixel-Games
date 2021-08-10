@@ -1,8 +1,11 @@
 const crateCapacity = 10;
 const blockDataScope = require('./blocks');
-blocksJSON = {};
+const weapons = require('./weapons');
+var blocksJSON = {};
+var weaponsJSON = {};
 const setupBlocks = function() {
 	blocksJSON = blockDataScope.blocks();
+	weaponsJSON = weapons.weapons();
 };
 
 function shuffle(array) {
@@ -99,6 +102,96 @@ const lootTable = {
 		rarityRange: 2,
 		minCount: 2,
 		maxCount: 7
+	},
+	"Warrior's Sword": {
+	  rarity: 2,
+	  rarityRange: 3,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Battle Axe": {
+	  rarity: 3,
+	  rarityRange: 4,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Ironhand Mace": {
+	  rarity: 3,
+	  rarityRange: 3,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Golden Katana": {
+	  rarity: 6,
+	  rarityRange: 3,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Hell Bent Axe": {
+	  rarity: 7,
+	  rarityRange: 3,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Magma Lamp": {
+	  rarity: 8,
+	  rarityRange: 2.5,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Corrupted Katana": {
+	  rarity: 6,
+	  rarityRange: 2,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Diamond Greatsword": {
+	  rarity: 9,
+	  rarityRange: 3,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Leafcutter": {
+	  rarity: 4,
+	  rarityRange: 3,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Golden Swordfury": {
+	  rarity: 8,
+	  rarityRange: 2,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Cutlass": {
+	  rarity: 2,
+	  rarityRange: 3,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Flamefury": {
+	  rarity: 7,
+	  rarityRange: 3,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Night's Edge": {
+	  rarity: 4,
+	  rarityRange: 2,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Guardian's Doomblade": {
+	  rarity: 10,
+	  rarityRange: 3,
+	  minCount: 1,
+	  maxCount: 1
+	},
+  "Soulblade": {
+	  rarity: 10,
+	  rarityRange: 2,
+	  minCount: 1,
+	  maxCount: 1
 	}
 };
 
@@ -108,8 +201,8 @@ const pickItem = function(rarity) {
 	Object.keys(lootTable).forEach(function(item) {
 		let object = lootTable[item];
 		object.name = item;
-		if (rarity > object.rarity - (object.rarityRange / 2)) {
-			if (rarity < object.rarity + (object.rarityRange / 2)) {
+		if (object.rarity > rarity - (object.rarityRange / 2)) {
+			if (object.rrarity < rarity + (object.rarityRange / 2)) {
 				items.push(lootTable[item]);
 			}
 		}
@@ -155,6 +248,9 @@ const generateLoot = function(rarity) {
 	let loot = {};
 	let includeItem = false;
 	targetIndexes.forEach(function(index) {
+    rarity = Math.max(rarity, 1);
+	  rarity = Math.min(rarity, 10);
+	  rarity += Math.random() - 0.5;
 		if (!includeItem) {
 			let item = pickItem(rarity);
 			if (item.name) {
@@ -195,6 +291,9 @@ const generateLoot = function(rarity) {
 			loot[item].type = 'Blocks/';
 		} else {
 			loot[item].type = 'Items/';
+		}
+		if (weaponsJSON[loot[item].name]) {
+		  loot[item].type = "Weapons/";
 		}
 	});
 	return loot;
