@@ -1,4 +1,5 @@
 const pathfind = function(start, end, weights) {
+  
 	// initialize
 	let growthBlocks = {};
 	let distanceValues = {};

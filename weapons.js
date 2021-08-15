@@ -17,7 +17,9 @@ const weapons = {
     initialHandRotation: -90,
     finalHandRotation: 45,
     initialObjectRotation: -45,
-    finalObjectRotation: 105
+    finalObjectRotation: 105,
+    drawSound: "1",
+    swingSound: "slow"
   },
   "Battle Axe": {
     type: "Melee",
@@ -37,7 +39,9 @@ const weapons = {
     initialHandRotation: -90,
     finalHandRotation: 45,
     initialObjectRotation: -45,
-    finalObjectRotation: 105
+    finalObjectRotation: 105,
+    drawSound: "1",
+    swingSound: "medium"
   },
   "Golden Swordfury": {
     type: "Melee",
@@ -57,7 +61,10 @@ const weapons = {
     initialHandRotation: -90,
     finalHandRotation: 45,
     initialObjectRotation: -45,
-    finalObjectRotation: 105
+    finalObjectRotation: 105,
+    drawSound: "2",
+    swingSound: "medium",
+    particles: "Yellow"
   },
   "Corrupted Katana": {
     type: "Melee",
@@ -78,6 +85,9 @@ const weapons = {
     finalHandRotation: 45,
     initialObjectRotation: -45,
     finalObjectRotation: 125,
+    drawSound: "4",
+    swingSound: "fast",
+    particles: "Corrupt",
     inflicts: [
       {
         effect: "Poison",
@@ -104,7 +114,9 @@ const weapons = {
     initialHandRotation: -90,
     finalHandRotation: 45,
     initialObjectRotation: -45,
-    finalObjectRotation: 105
+    finalObjectRotation: 105,
+    drawSound: "1",
+    swingSound: "fast"
   },
   "Diamond Greatsword": {
     type: "Melee",
@@ -124,7 +136,10 @@ const weapons = {
     initialHandRotation: -90,
     finalHandRotation: 45,
     initialObjectRotation: -45,
-    finalObjectRotation: 105
+    finalObjectRotation: 105,
+    drawSound: "5",
+    swingSound: "slow",
+    particles: "Blue"
   },
   "Flamefury": {
     type: "Melee",
@@ -145,6 +160,9 @@ const weapons = {
     finalHandRotation: 45,
     initialObjectRotation: -45,
     finalObjectRotation: 105,
+    drawSound: "5",
+    swingSound: "slow",
+    particles: "Flame",
     inflicts: [
       {
         effect: "Burning",
@@ -171,7 +189,9 @@ const weapons = {
     initialHandRotation: -90,
     finalHandRotation: 45,
     initialObjectRotation: -45,
-    finalObjectRotation: 105
+    finalObjectRotation: 105,
+    drawSound: "2",
+    swingSound: "fast"
   },
   "Hell Bent Axe": {
     type: "Melee",
@@ -192,6 +212,9 @@ const weapons = {
     finalHandRotation: 45,
     initialObjectRotation: -45,
     finalObjectRotation: 105,
+    drawSound: "3",
+    swingSound: "medium",
+    particles: "Flame",
     inflicts: [
       {
         effect: "Burning",
@@ -218,7 +241,10 @@ const weapons = {
     initialHandRotation: -90,
     finalHandRotation: 45,
     initialObjectRotation: -45,
-    finalObjectRotation: 105
+    finalObjectRotation: 105,
+    drawSound: "5",
+    swingSound: "medium",
+    particles: "Blue"
   },
   "Ironhand Mace": {
     type: "Melee",
@@ -238,7 +264,9 @@ const weapons = {
     initialHandRotation: -90,
     finalHandRotation: 45,
     initialObjectRotation: -45,
-    finalObjectRotation: 105
+    finalObjectRotation: 105,
+    drawSound: "1",
+    swingSound: "slow"
   },
   "Leafcutter": {
     type: "Melee",
@@ -258,7 +286,9 @@ const weapons = {
     initialHandRotation: -90,
     finalHandRotation: 45,
     initialObjectRotation: -45,
-    finalObjectRotation: 105
+    finalObjectRotation: 105,
+    swingSound: "medium",
+    drawSound: "4"
   },
   "Magma Lamp": {
     type: "Melee",
@@ -279,6 +309,9 @@ const weapons = {
     finalHandRotation: 45,
     initialObjectRotation: -45,
     finalObjectRotation: 105,
+    drawSound: "2",
+    swingSound: "medium",
+    particles: "Flame",
     inflicts: [
       {
         effect: "Burning",
@@ -305,7 +338,10 @@ const weapons = {
     initialHandRotation: -90,
     finalHandRotation: 45,
     initialObjectRotation: -45,
-    finalObjectRotation: 105
+    finalObjectRotation: 105,
+    drawSound: "4",
+    swingSound: "medium",
+    particles: "Corruption"
   },
   "Soulblade": {
     type: "Melee",
@@ -326,7 +362,30 @@ const weapons = {
     finalHandRotation: 45,
     initialObjectRotation: -45,
     finalObjectRotation: 105,
-    lifesteal: 0.5
+    lifesteal: 0.5,
+    drawSound: "4",
+    swingSound: "slow",
+    particles: "Soul"
+  },
+  "Scar-L":  {
+    type: "Firearm",
+    attackSpeed: 0.2,
+    damage: 8,
+    range: 3,
+    xAnchor: 90,
+    yAnchor: 50,
+    hotbarSize: 1.95,
+    hotbarRotation: 45,
+    equipSize: 1.5,
+    equipRotation: -25,
+    itemSize: 1.4,
+    itemRotation: 0,
+    rotationOffset: -2.5,
+    drawSound: "Gun 1",
+    shootColor: "#FFFF66",
+    bulletColor: "#FFFF66",
+    shootSound: "Scar",
+    shootSize: 0.25
   }
 }
 

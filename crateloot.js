@@ -201,8 +201,8 @@ const pickItem = function(rarity) {
 	Object.keys(lootTable).forEach(function(item) {
 		let object = lootTable[item];
 		object.name = item;
-		if (object.rarity > rarity - (object.rarityRange / 2)) {
-			if (object.rrarity < rarity + (object.rarityRange / 2)) {
+		if (object.rarity >= rarity - (object.rarityRange / 2)) {
+			if (object.rarity <= rarity + (object.rarityRange / 2)) {
 				items.push(lootTable[item]);
 			}
 		}

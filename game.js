@@ -11,13 +11,19 @@ const worldHeightLimit = 100;
 const food = require('./food');
 const weapons = require('./weapons');
 const hyperPad = require('./jsonsafe');
+const statusEffects = require('./effects')
+var statusEffectsJSON = {};
 var weaponsJSON = {};
 var foodJSON = {};
 var blocksJSON = {};
+var craftingRecipesJSON = {};
+const craftingRecipes = require('./crafting')
 const initializeScript = function() {
 	weaponsJSON = weapons.weapons();
 	foodJSON = food.foodJSON();
 	blocksJSON = blockDataScope.blocks();
+  statusEffectsJSON = statusEffects.effects();
+  craftingRecipesJSON = craftingRecipes.recipes();
 };
 exports.initialize = initializeScript;
 
@@ -309,6 +315,103 @@ startMatch = function(world, uuid, players, settings) {
 			eating: false,
 			eatTimer: undefined,
       attacking: false,
+      effects: {},
+      give: function(item, count = 1) {
+        let self = this;
+        let i = inventory.give(this.inventory, item, count);
+        this.inventory = i.inventory;
+        if (i.leftover) {
+          summonItem(self.worldUUID, self.x, self.y, item, i.leftover);
+        }
+      },
+      hasItem: function(item, count = 1) {
+        this.inventory.forRach(function(slotData) {
+          if (slotData.name == item) {
+            count--;
+          }
+        });
+        if (count <= 0) {
+          return true;
+        }
+        return false;
+      },
+      craft: function(recipe) {
+        if (craftingRecipesJSON[recipe]) {
+          let self = this;
+          let inv = this.inventory;
+          let recipeItem = craftingRecipesJSON[recipe].recipe;
+          let canCraft = true;
+          let itemsToRemove = {};
+          recipeItem.forEach(function(item) {
+            if (!self.hasItem(item.item, item.count)) {
+              canCraft = false;
+            } else {
+              itemsToRemove[item.item] = item.count;
+            }
+          });
+          if (canCraft) {
+            let invIndex = 0;
+            this.inventory.forEach(function(item) {
+              Object.keys(itemsToRemove).forEach(function(itemName) {
+                if (item.name == itemName) {
+                  itemsToRemove[itemName] -= item.count;
+                  let i = inventory.remove(self.inventory, invIndex, itemName, itemsToRemove[itemName]);
+                  self.inventory = i.inventory;
+                  if (itemsToRemove[itemName] <= 0) {
+                    delete itemsToRemove[itemName];
+                  }
+                }
+              });
+              invIndex++;
+            })
+            self.give(recipe, recipeItem.yieldCount);
+          }
+        }
+      },
+      whileEffect: function() {
+        let self = this;
+        Object.keys(this.effects).forEach(function(effect) {
+          let data = statusEffectsJSON[effect] || {};
+          let effectData = self.effects[effect];
+          if (Date.now() - effectData.effectStateChange >= 1) {
+            effectData.effectStateChange = Date.now();
+            let addToHealth = data.addToHealth || 0;
+            let event = {
+              type: "Player",
+              weapon: effect,
+              uuid: data.attacker
+            };
+            self.addToHealth(addToHealth, event, {
+              type: "Particle", effect
+            });
+          }
+          if (Date.now() > effectData.effectEnd) {
+            io.to(this.worldUUID).emit("end effect", {
+              effect
+            });
+            delete self.effects[effect];
+          }
+        });
+      },
+      inflictEffect: function(effect, duration, attackerUUID) {
+        console.log(effect, duration, attackerUUID);
+        this.effects[effect] = {
+          effectEnd: Date.now() + (duration * 1000),
+          effectStateChange: 0,
+          attacker: attackerUUID
+        };
+        io.to(this.uuid).emit("new status effect", {
+          effect: effect,
+          effectEnd: (Date.now() / 1000) + duration,
+          attacker: attackerUUID
+        });
+        io.to(this.worldUUID).emit("inflict effect", {
+          effect,
+          effectEnd: (Date.now() / 1000) + duration,
+          duration,
+          uuid: this.uuid
+        })
+      },
       stopAttack: function() {
         if (this.attacking) {
           this.attacking = false;
@@ -349,7 +452,7 @@ startMatch = function(world, uuid, players, settings) {
               if (weapon.type == "Melee") {
                 let uuid = this.uuid;
                 io.to(this.worldUUID).emit("animation", {
-                  name: "/meleeAttack " + weapon.name,
+                  name: "/meleeAttack " + this.inventory[slot].name,
                   uuid
                 });
               }
@@ -509,6 +612,10 @@ startMatch = function(world, uuid, players, settings) {
 									'damage',
 									-add
 								);
+                io.to(event.uuid).emit("damage indicator", {
+                  damage: -add,
+                  uuid: uuid
+                });
 							}
 						}
 					}
@@ -635,6 +742,7 @@ startMatch = function(world, uuid, players, settings) {
 					let worldUUID = this.worldUUID;
 					let playerUUID = this.uuid;
 					let name = this.name;
+          let self = this;
 
 					// check for other players
 					games[worldUUID].playerObjects.forEach(function(obj) {
@@ -647,6 +755,20 @@ startMatch = function(world, uuid, players, settings) {
 										type: 'Player',
 										weapon: weapon
 									});
+                  // inflict effects
+                  let effects = (weaponsJSON[weapon] || {}).inflicts || [];
+                  effects.forEach(function(effect) {
+                    if (Math.random() < effect.chance) {
+                      obj.inflictEffect(effect.effect, effect.duration, playerUUID);
+                    }
+                  });
+                  // lifesteal
+                  let lifesteal = (statusEffectsJSON[weapon] || {}).lifesteal || 0;
+                  if (lifesteal > 0) {
+                    self.addToHealth(lifesteal * dmg, {
+                      type: "Lifesteal"
+                    });
+                  }
 								}
 							}
 						}
@@ -782,6 +904,7 @@ const runGame = function(game) {
 	let requireKeys = ['x', 'y', 'uuid', 'health', 'xFlip', 'name'];
 	game.playerObjects.forEach(function(player) {
     player.whileAttack();
+    player.whileEffect();
 		if (player.type == 'Bot') {
 			botFunction.iterate(player, game);
 		}
@@ -794,8 +917,14 @@ const runGame = function(game) {
 		});
 		playerMovePacket.push(packet);
 	});
-	if (game.matchBegins < Date.now() && !game.settings.creative) {
-		match(game);
+	if (game.matchBegins < Date.now()) {
+    if (!game.announcedStart) {
+      game.announcedStart = true;
+      io.to(game.uuid).emit("game started");
+    }
+    if (!game.settings.creative) {
+		  match(game);
+    }
 	} else {
 	  if (game.playerObjects.length == 0) {
 	    endMatch(game.uuid);
@@ -1233,6 +1362,15 @@ io.on('connection', function(socket) {
 		}
     callback("done");
 	});
+  socket.on("craft", function(input, callback) {
+    if (socket.ingame) {
+      if (referPlayer(socket.room, socket.id).alive) {
+        let player = referPlayer(socket.room, socket.id);
+        player.craft(input);
+      }
+    }
+    callback("done");
+  });
   socket.on("weapon attack", function(input, callback) {
     if (socket.ingame && isDictionary(input)) {
 			if (referPlayer(socket.room, socket.id).alive) {

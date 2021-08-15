@@ -58,10 +58,14 @@ const proximity = function(xDelta, yDelta, distance) {
 	return false;
 };
 
-var generateWorld = function(
+// generate world function
+var generateWorld = async function(
 	chunkSize = 5,
 	worldSettings = defaultWorldSettings
 ) {
+
+  return new Promise((resolve) => {
+
 	// initialize
 	blocksJSON = blockDataScope.blocks();
 	let settings = worldSettings;
@@ -852,7 +856,7 @@ var generateWorld = function(
 	}
 
 	// return data
-	return {
+	resolve({
 		world,
 		blockData: worldBlockData,
 		lightBlocks,
@@ -864,7 +868,8 @@ var generateWorld = function(
 		interests,
 		crateLoot,
 		blockCost
-	};
+	});
+  })
 };
 
 exports.generateWorld = generateWorld;

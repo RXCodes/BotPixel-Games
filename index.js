@@ -22,6 +22,9 @@ const food = require('./food');
 const foodJSON = food.foodJSON();
 const weapons = require('./weapons');
 const weaponData = weapons.weapons();
+const effects = require("./effects");
+const crafting = require("./crafting");
+const craftingRecipes = crafting.recipes();
 crateLoot.setup();
 gameHandler.initialize();
 
@@ -74,6 +77,8 @@ io.on('connection', function(socket) {
 	io.to(socket.id).emit('connected', "connected");
 	io.to(socket.id).emit('default world gen', worldgen.defaultWorldSettings());
   io.to(socket.id).emit('weapon data', weaponData);
+  io.to(socket.id).emit("effect status data", effects.effects());
+  io.to(socket.id).emit("crafting recipe", craftingRecipes);
 	socket.uuid = socket.id;
 	socket.matchmaking = false;
 	socket.ingame = false;
@@ -420,8 +425,8 @@ const matchmake = function() {
 			});
 			if (start) {
 				const startGame = function(roomData) {
-					setTimeout(function() {
-						let world = worldGen.generateWorld();
+					setTimeout(async function() {
+						let world = await worldGen.generateWorld();
 						let matchmakeData = gameHandler.startMatch(
 							world,
 							roomUUID,
@@ -442,7 +447,7 @@ const matchmake = function() {
 						);
 						io.to(roomUUID).emit('loot', hyperPad.serialize(world.crateLoot));
 						io.to(roomUUID).emit('player count', JSON.stringify(ids.length));
-					}, 1000);
+					}, 500);
 				};
 				let meta = false;
 				if (queneCache[key].customRoom) {

@@ -33,7 +33,9 @@ const inRange = function(x, y, x2, y2, range) {
 const setup = require('./setup');
 io = setup.io();
 
-var iterate = function(bot, game) {
+var iterate = async function(bot, game) {
+  
+  return new Promise((resolve) => {
 	const uuid = game.uuid;
 
 	// setup
@@ -1022,11 +1024,14 @@ var iterate = function(bot, game) {
           if (!hasMelee) {
 					  bot.mining = true;
           } else {
+            bot.cancelEat();
+            bot.stopMining();
+            bot.holdItem("Weapons/" + bot.inventory[meleeSlotIndex].name);
             bot.startAttack(meleeSlotIndex);
           }
 				}
 			}
-      if (!bot.mining || !bot.attacking) {
+      if (!bot.mining && !bot.attacking) {
         bot.stopAttack();
       }
 		} else {
@@ -1113,6 +1118,10 @@ var iterate = function(bot, game) {
 		  }, 1000);
 		}
 	}
+	
+	resolve();
+  });
+  
 };
 
 exports.iterate = iterate;

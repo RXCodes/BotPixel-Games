@@ -233,7 +233,8 @@ const initialize = function() {
 		    let amount = statistics[stat];
 		    Object.keys(missions).forEach(function(key) {
 		      if (missions[key].objective == stat) {
-		        missions[key].progress += amount;
+            missions[key].progress = parseFloat(missions[key].progress);
+		        missions[key].progress += parseFloat(amount) || 0;
 		        if (missions[key].progress >= missions[key].count) {
 		          missions[key].claimable = true;
 		        }
