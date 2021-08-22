@@ -20,6 +20,11 @@ const effects = {
     addToHealth: -5,
     emitterColor: "#FF49FFFF",
     effectSprite: "Fire"
+  },
+  Electric: {
+    addToHealth: -6,
+    emitterColor: "#FFFFFF60",
+    effectSprite: "Lightning"
   }
 }
 

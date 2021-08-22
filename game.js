@@ -11,7 +11,8 @@ const worldHeightLimit = 100;
 const food = require('./food');
 const weapons = require('./weapons');
 const hyperPad = require('./jsonsafe');
-const statusEffects = require('./effects')
+const statusEffects = require('./effects');
+const gun = require('./guns');
 var statusEffectsJSON = {};
 var weaponsJSON = {};
 var foodJSON = {};
@@ -147,7 +148,8 @@ const defaultSettings = {
 	autofillBots: true,
 	disablePVP: false,
 	disastersEnabled: true,
-	explosionGrief: true
+	explosionGrief: true,
+  creative: false
 };
 
 // start match
@@ -316,6 +318,16 @@ startMatch = function(world, uuid, players, settings) {
 			eatTimer: undefined,
       attacking: false,
       effects: {},
+      shoot: function(weapon, angle, maximumDistance = 20) {
+        let self = this;
+        let collisions = games[this.worldUUID].collisions;
+        let players = games[this.worldUUID].playerObjects;
+        guns.shoot(weapon, collisions, angle, maximumDistance, players).then(
+          (position) => {
+            io.to(self.worldUUID).emit("player shoot", self.uuid, position[0], position[1],
+            self.x - position[0], self.y - position[1]);
+          })
+      },
       give: function(item, count = 1) {
         let self = this;
         let i = inventory.give(this.inventory, item, count);
@@ -373,13 +385,13 @@ startMatch = function(world, uuid, players, settings) {
         Object.keys(this.effects).forEach(function(effect) {
           let data = statusEffectsJSON[effect] || {};
           let effectData = self.effects[effect];
-          if (Date.now() - effectData.effectStateChange >= 1) {
+          if (Date.now() - effectData.effectStateChange >= 1000) {
             effectData.effectStateChange = Date.now();
             let addToHealth = data.addToHealth || 0;
             let event = {
               type: "Player",
               weapon: effect,
-              uuid: data.attacker
+              uuid: effectData.attacker
             };
             self.addToHealth(addToHealth, event, {
               type: "Particle", effect
@@ -387,6 +399,7 @@ startMatch = function(world, uuid, players, settings) {
           }
           if (Date.now() > effectData.effectEnd) {
             io.to(this.worldUUID).emit("end effect", {
+              uuid: self.uuid,
               effect
             });
             delete self.effects[effect];
@@ -394,7 +407,6 @@ startMatch = function(world, uuid, players, settings) {
         });
       },
       inflictEffect: function(effect, duration, attackerUUID) {
-        console.log(effect, duration, attackerUUID);
         this.effects[effect] = {
           effectEnd: Date.now() + (duration * 1000),
           effectStateChange: 0,
@@ -1721,6 +1733,9 @@ const match = function(game) {
 		) {
 			if (Math.abs(player.playzoneDamageDelay - Date.now()) >= 1000) {
 				let playzoneDamage = 5 + Math.floor(game.zoneIteration / 2) * 5;
+        if (Math.random() < 0.15) {
+          player.inflictEffect("Electric", 5, "storm");
+        }
 				player.playzoneDamageDelay = Date.now();
 				player.addToHealth(-playzoneDamage, { type: 'Playzone' });
 				io.to(game.uuid).emit('Playzone Hit', player.uuid);

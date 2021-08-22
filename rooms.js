@@ -79,7 +79,7 @@ io.on('connection', function(socket) {
           callback("error", "Capacity is not a number.");
           return;
         };
-        if (parseInt(data.capacity) < 1 && parseInt(data.capacity) > 30) {
+        if (parseInt(data.capacity) < 1 && parseInt(data.capacity) > 50) {
           callback("error", "Capacity is out of range.");
           return;
         }

@@ -25,7 +25,7 @@ const defaultWorldSettings = {
 	woodCrateGapRange: 5,
 	dungeonCount: 5,
 	dungeonSpawnLayer: 10,
-	caveTypes: ['Limestone'],
+	caveTypes: ['Limestone', "Overgrowth"],
 	caveBiomeChance: 0.8,
 	minStalagtiteLength: 2,
 	stalagtiteLengthRange: 4,

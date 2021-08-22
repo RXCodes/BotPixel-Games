@@ -362,7 +362,7 @@ const weapons = {
     finalHandRotation: 45,
     initialObjectRotation: -45,
     finalObjectRotation: 105,
-    lifesteal: 0.5,
+    lifesteal: 0.25,
     drawSound: "4",
     swingSound: "slow",
     particles: "Soul"

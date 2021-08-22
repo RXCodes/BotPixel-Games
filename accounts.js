@@ -390,6 +390,37 @@ const initialize = function() {
 			}
 		});
 
+    // player profile fetch
+		socket.on('fetch players', async function(input, callback) {
+      profiles = await db.collection("users").get();
+      profiles = profiles || {};
+      let output = [];
+      profiles.forEach(function(id) {
+        let account = profiles[id];
+        if (players[account.uuid]) {
+          let data = JSON.parse(JSON.stringify(account));
+          delete data.password;
+          delete data.username;
+          delete data.missions;
+          delete data.friendRequests;
+          delete data.friends;
+          output.push(data);
+        }
+      });
+      profiles.forEach(function(account) {
+        if (!players[account.uuid]) {
+          let data = JSON.parse(JSON.stringify(account));
+          delete data.password;
+          delete data.username;
+          delete data.missions;
+          delete data.friendRequests;
+          delete data.friends;
+          output.push(data);
+        }
+      });
+      callback("success", output);
+    });
+
 		// backup data when player disconnects
 		socket.on('disconnect', function() {
 			if (socket.login) {
