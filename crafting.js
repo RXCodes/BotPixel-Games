@@ -5,7 +5,8 @@ const recipes = {
     recipe: [
       {
         item: "Oak Log",
-        count: 1
+        count: 1,
+        display: "Blocks/Oak Log"
       }
     ],
     display: "Blocks/Oak Planks",
@@ -17,7 +18,8 @@ const recipes = {
     recipe: [
       {
         item: "Birch Log",
-        count: 1
+        count: 1,
+        display: "Blocks/Birch Log"
       }
     ],
     display: "Blocks/Birch Planks",
@@ -29,11 +31,13 @@ const recipes = {
     recipe: [
       {
         item: "Stone",
-        count: 4
+        count: 4,
+        display: "Blocks/Stone"
       },
       {
         item: 'Basalt',
-        count: 1
+        count: 1,
+        display: "Blocks/Basalt"
       }
     ],
     display: "Blocks/Stone Bricks",
@@ -45,11 +49,13 @@ const recipes = {
     recipe: [
       {
         item: "Apple",
-        count: 1
+        count: 1,
+        display: "Items/Apple"
       },
       {
         item: "Gold",
-        count: 5
+        count: 5,
+        display: "Items/Gold"
       }
     ],
     display: "Items/Golden Apple",
@@ -61,11 +67,13 @@ const recipes = {
     recipe: [
       {
         item: "Magma Lamp",
-        count: 1
+        count: 1,
+        display: "Weapons/Magma Lamp"
       },
       {
         item: "Battle Axe",
-        count: 1
+        count: 1,
+        display: "Weapons/Battle Axe"
       }
     ],
     display: "Weapons/Hell Bent Axe",
@@ -77,11 +85,13 @@ const recipes = {
     recipe: [
       {
         item: "Golden Swordfury",
-        count: 1
+        count: 1,
+        display: "Weapons/Golden Swordfury"
       },
       {
         item: "Diamond",
-        count: 10
+        count: 10,
+        display: "Items/Diamond"
       }
     ],
     display: "Weapons/Diamond Greatsword",
@@ -93,11 +103,13 @@ const recipes = {
     recipe: [
       {
         item: "Golden Katana",
-        count: 1
+        count: 1,
+        display: "Weapons/Golden Katana"
       },
       {
         item: "Bixbite",
-        count: 3
+        count: 3,
+        display: "Items/Bixbite"
       }
     ],
     display: "Weapons/Corrupted Katana",
@@ -109,15 +121,18 @@ const recipes = {
     recipe: [
       {
         item: "Guardian's Doomblade",
-        count: 1
+        count: 1,
+        display: "Weapons/Guardian's Doomblade"
       },
       {
         item: "Knight's Edge",
-        count: 1
+        count: 1,
+        display: "Weapons/Knight's Edge"
       },
       {
         item: "Amber",
-        count: 3
+        count: 3,
+        display: "Items/Amber"
       }
     ],
     display: "Weapons/Soulblade",

@@ -556,8 +556,8 @@ startMatch = function(world, uuid, players, settings) {
             }
 						let coordinates = position.split(',');
 						io.to(this.worldUUID).emit('Pick Up Item', {
-							x: JSON.stringify(coordinates[0]),
-							y: JSON.stringify(coordinates[1]),
+							x: parseInt(coordinates[0]),
+							y: parseInt(coordinates[1]),
 							type,
 							item: item.name,
 							uuid: this.uuid
@@ -1013,7 +1013,7 @@ const runGame = function(game) {
 		// check if item expires past lifetime
 		let index = 0;
 		if (item.lifetime > maxItemLifetime) {
-			pushEvent(game.uuid, 'Delete Item', game.itemEntities[index].id);
+			io.to(game.uuid).emit('Delete Item', item.id);
 			game.itemEntities[index] = 'delete';
 		} else {
 			item.y -= 0.45;
@@ -1064,7 +1064,7 @@ const runGame = function(game) {
 						item: item.item,
 						uuid: player.uuid
 					});
-					pushEvent(game.uuid, 'Delete Item', item.id);
+					io.to(game.uuid).emit('Delete Item', item.id);
 					io.to(player.uuid).emit('update inventory', player.inventory);
 				}
 				if (give.leftOver > 0 && give.success) {

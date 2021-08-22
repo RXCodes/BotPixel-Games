@@ -156,6 +156,64 @@ const initialize = function() {
 			}
 		});
 
+    // world fetch function
+    socket.fetchWorlds = function() {
+      if (socket.login) {
+        if (socket.accountData.worlds) {
+          socket.accountdata.worlds = [];
+        }
+      }
+    }
+
+    // world creation
+    socket.on('create custom world', function(input, callback) {
+      if (socket.login && isDictionary(input)) {
+        if (checkPacket(JSON.parse(input), ["name", "description", "settings", "privacy"])) {
+          socket.fetchWorlds();
+          const pass = function() {
+            let parsedPacket = JSON.parse(input);
+
+            if (parsedPacket.name.length > 3) {
+              callback("error", "World name is too short.");
+              return;
+            }
+            if (parsedPacket.name.length < 25) {
+              callback("error", "World name is too long.");
+              return;
+            }
+            if (socket.accountData.worlds.length < 10) {
+              callback("error", "World limit exceeded. You can only have a maximum amount of 10 worlds.");
+              return;
+            }
+
+            let worldID = socket.accountData.id + "/" + generateUUID()
+            let world = {
+              worldName: parsedPacket.name,
+              description: parsedPacket.description,
+              worldSettings: parsedPacket.settings,
+              privacy: parsedPacket.privacy,
+              opened: false,
+              canonicalWorldID: worldID,
+              customWorldID: undefined,
+              hasCustomWorldID: false
+            }
+            socket.accountData.worlds.push(world);
+            callback("success", world);
+            return;
+          }
+          pass();
+        }
+      }
+    });
+
+    // world fetch
+    socket.on('fetch worlds', function(input, callback) {
+      if (socket.login && isDictionary(input)) {
+        socket.fetchWorlds();
+        callback(socket.accountData.worlds);
+      }
+    });
+
 		// login
 		socket.on('login', function(input, callback) {
 			if (socket.secure && isDictionary(input) && !socket.login) {

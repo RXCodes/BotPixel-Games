@@ -9,7 +9,7 @@ const TNT = function(entity) {
 
 // Meteor
 const Meteor = function(entity, worldCollisions) {
-	if (entity.wait(20, 'Despawn')) {
+	if (entity.wait(10, 'Despawn')) {
 		entity.kill();
 	}
 	let x = Math.round(entity.x);
