@@ -91,7 +91,7 @@ const weapons = {
     inflicts: [
       {
         effect: "Poison",
-        duration: 10,
+        duration: 3,
         chance: 0.5
       }
     ]
@@ -166,7 +166,7 @@ const weapons = {
     inflicts: [
       {
         effect: "Burning",
-        duration: 10,
+        duration: 4,
         chance: 0.5
       }
     ]
@@ -218,7 +218,7 @@ const weapons = {
     inflicts: [
       {
         effect: "Burning",
-        duration: 10,
+        duration: 5,
         chance: 1
       }
     ]
@@ -315,7 +315,7 @@ const weapons = {
     inflicts: [
       {
         effect: "Burning",
-        duration: 5,
+        duration: 2,
         chance: 1
       }
     ]
@@ -385,7 +385,9 @@ const weapons = {
     shootColor: "#FFFF66",
     bulletColor: "#FFFF66",
     shootSound: "Scar",
-    shootSize: 0.25
+    shootSize: 0.25,
+    shootInterval: 0.2,
+    ammoCapacity: 30
   }
 }
 

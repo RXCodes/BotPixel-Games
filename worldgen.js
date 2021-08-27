@@ -25,24 +25,34 @@ const defaultWorldSettings = {
 	woodCrateGapRange: 5,
 	dungeonCount: 5,
 	dungeonSpawnLayer: 10,
-	caveTypes: ['Limestone', "Overgrowth"],
+	caveTypes: ['Limestone', "Overgrown"],
 	caveBiomeChance: 0.8,
 	minStalagtiteLength: 2,
 	stalagtiteLengthRange: 4,
 	extendedStalagtiteChance: 0.4,
 	limestoneRockFormationChance: 0.35,
-	limestoneCaveClayFloorIntegrity: 0.25,
+	limestoneCaveClayFloorIntegrity: 0.3,
 	limestoneCaveCrateChance: 0.2,
 	mushroomSpawnRate: 0.3,
 	vegetationSpawnRate: 0.4,
-	undergroundVegetationSpawnRate: 0.55
+	undergroundVegetationSpawnRate: 0.55,
+	glowingAmberOreChance: 0.0025,
+	deepGlowingAmberChance: 0.002,
+	goldOreChance: 0.0025,
+	deepGoldOreChance: 0.002,
+	deepBixbiteOreChance: 0.001,
+	stoneLayerFossilChance: 0.025,
+	deepLayerFossilChance: 0.025,
+	bedrockLayerFossilChance: 0.05
 };
 
 const blockDataScope = require('./blocks');
 const crates = require('./crateloot');
 var blocksJSON = {};
 const defaultSettings = function() {
-  return defaultWorldSettings;
+  let settings = defaultWorldSettings;
+  delete settings.worldSisze;
+  return settings;
 }
 exports.defaultWorldSettings = defaultSettings;
 const distance = function(x, y, x2, y2) {
@@ -269,11 +279,11 @@ var generateWorld = async function(
 			return 'Dirty Stone';
 		}
 
-		if (Math.random() < 0.01 && y > settings.deepLayerLevel) {
+		if (Math.random() < settings.stoneLayerFossilChance && y > settings.deepLayerLevel) {
 			let fossilChoices = ['Fossil', 'Fossil 2', 'Body Fossil', 'Rib Fossil'];
 			let index = Math.round(Math.random() * (fossilChoices.length - 1));
 			return fossilChoices[index];
-		} else if (Math.random() < 0.01 && y < settings.deepLayerLevel && y > 6) {
+		} else if (Math.random() < settings.deepLayerFossilChance && y < settings.deepLayerLevel && y > 6) {
 			let fossilChoices = [
 				'Deep Fossil',
 				'Deep Body Fossil',
@@ -281,7 +291,7 @@ var generateWorld = async function(
 			];
 			let index = Math.round(Math.random() * (fossilChoices.length - 1));
 			return fossilChoices[index];
-		} else if (Math.random() < 0.005 && y <= 5) {
+		} else if (Math.random() < settings.bedrockLayerFossilChance && y <= 5) {
 			let fossilChoices = [
 				'Bedrock Fossil',
 				'Bedrock Body Fossil',
@@ -291,19 +301,19 @@ var generateWorld = async function(
 			return fossilChoices[index];
 		}
 
-		if (Math.random() < 0.0025 && y > settings.deepLayerLevel) {
+		if (Math.random() < settings.glowingAmberOreChance && y > settings.deepLayerLevel) {
 			return 'Glowing Amber';
 		}
 
-		if (Math.random() < 0.002 && y < settings.deepLayerLevel && y > 6) {
+		if (Math.random() < settings.deepGlowingAmberChance && y < settings.deepLayerLevel && y > 6) {
 			return 'Deep Glowing Amber';
 		}
 
-		if (Math.random() < 0.0025 && y > settings.deepLayerLevel) {
+		if (Math.random() < settings.goldOreChance && y > settings.deepLayerLevel) {
 			return 'Gold Ore';
 		}
 
-		if (Math.random() < 0.002 && y < settings.deepLayerLevel && y > 6) {
+		if (Math.random() < settings.deepGoldOreChance && y < settings.deepLayerLevel && y > 6) {
 			return 'Deep Gold Ore';
 		}
 
@@ -312,7 +322,7 @@ var generateWorld = async function(
 			let rareOreChoices = ['Ruby Ore', 'Tanzanite Ore'];
 		}
 
-		if (Math.random() < 0.001 && y < settings.deepLayerLevel && y > 6) {
+		if (Math.random() < settings.deepBixbiteOreChance && y < settings.deepLayerLevel && y > 6) {
 			return 'Deep Bixbite Ore';
 		}
 
@@ -594,7 +604,7 @@ var generateWorld = async function(
 					  }
 					}
 				  if (Math.random() < settings.limestoneCaveClayFloorIntegrity) {
-					  setRadius(x, floorPos - 1, "Clay", 3.5, "Solid");
+					  setRadius(x, floorPos - 1, "Clay", 4, "Solid");
 					}
 				}
 			});
@@ -693,12 +703,12 @@ var generateWorld = async function(
 					  if (Math.random() < 0.75) {
 					    placeBlock(x, floorPos, "Iron Crate");
 					    let loot = crates.generateLoot(4 + Math.round(Math.random() * 4));
-					    fillCrate(x, floorPos + 1, loot)
+					    fillCrate(x, floorPos, loot)
 					  } else {
-					    placeBlock(x, floorPos + 2, "Gold Crate");
-					    placeBlock(x, floorPos + 1, "Limestone Table");
+					    placeBlock(x, floorPos + 1, "Gold Crate");
+					    placeBlock(x, floorPos, "Limestone Table");
 					    let loot = crates.generateLoot(8 + Math.round(Math.random() * 4));
-					    fillCrate(x, floorPos + 2, loot)
+					    fillCrate(x, floorPos + 1, loot)
 					  }
 					}
 				  if (Math.random() < settings.limestoneCaveClayFloorIntegrity && floor) {

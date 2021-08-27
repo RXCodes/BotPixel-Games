@@ -156,7 +156,7 @@ const initialize = function() {
 			}
 		});
 
-    // world fetch function
+    // world list fetch function
     socket.fetchWorlds = function() {
       if (socket.login) {
         if (socket.accountData.worlds) {
@@ -164,6 +164,113 @@ const initialize = function() {
         }
       }
     }
+
+    // fetch single world function
+    socket.selectWorld = function(worldID) {
+      if (socket.login) {
+        socket.fetchWorlds();
+        let worlds = socket.accountData.worlds;
+        worlds.forEach(function(world) {
+          if (world.canonicalWorldID == worldID) {
+            return(world);
+          }
+        })
+      }
+      return false;
+    }
+
+    // apply custom url on world
+    socket.on('world custom url', function(input, callback) {
+      if (socket.login && isDictionary(input)) {
+        let parsedPacket = JSON.parse(input);
+        if (checkPacket(parsedPacket, ["endpoint", "worldID"])) {
+          socket.fetchWorlds();
+          let world = socket.selectWorld(parsedPacket.worldID);
+          if (world) {
+            const check = function() {
+              if (socket.accountData.currency < 100) {
+                callback("error", "100 gold is required to change the world's share link.");
+                return;
+              }
+              if (parsedPacket.endpoint.length < 3) {
+                callback("error", "Link endpoint is too short.");
+                return;
+              }
+              if (parsedPacket.endpoint.length > 25) {
+                callback("error", "Link endpoint is too long. 25 characters maximum.");
+                return;
+              }
+              world.customWorldID = socket.accountData.id + "-" + parsedPacket.endpoint;
+              world.hasCustomWorldID = true;
+              callback("success", world.customWorldID);
+            }
+            check();
+          } else {
+            callback("error", "World does not exist.")
+          }
+        }
+      }
+    });
+
+    // update world information
+    socket.on("update world details", function(input, callback) {
+      if (socket.login && isDictionary(input)) {
+        if (checkPacket(parsedPacket, ["worldID", "title", "description"])) {
+          socket.fetchWorlds();
+          let world = socket.selectWorld(parsedPacket.worldID);
+          if (world) {
+            if (parsedPacket.title.length > 3) {
+              callback("error", "World name is too short.");
+              return;
+            }
+            if (parsedPacket.title.length < 25) {
+              callback("error", "World name is too long.");
+              return;
+            }
+            if (parsedPacket.description.length < 500) {
+              callback("error", "Description is too long. 500 characters max.");
+              return;
+            }
+            world.worldName = parsedPacket.title;
+            world.description = parsedPacket.description;
+          } else {
+            callback("error", "World does not exist.");
+          }
+        }
+      }
+    });
+
+    // world open
+    socket.on("open custom world", function(input, callback) {
+      if (socket.login && isDictionary(input)) {
+        let parsedPacket = JSON.parse(input);
+        if (parsedPacket.worldID) {
+          socket.fetchWorlds();
+          let worldOBJ = socket.selectWorld(parsedPacket.worldID);
+          if (worldOBJ) {
+            const pass = async function() {
+              let world = await worldGen.generateWorld(5, worldOBJ.settings);
+              let roomData = {creative: true};
+              io.to(socket.id).emit(
+							  'open world',
+							  hyperPad.serialize(world.world),
+							  world.chunks,
+							  hyperPad.serialize(world.crateLoot)
+						  );
+						  io.to(socket.id).emit('loot', hyperPad.serialize(world.crateLoot));
+						  io.to(socket.id).emit('player count', "1");
+              io.to(socket.id).emit('room data', roomData);
+            }
+            callback("success", "Loading world...");
+            pass();
+          } else {
+            callback("error", "World does not exist.");
+          }
+        } else {
+          callback("error", "No world selected.");
+        }
+      }
+    });
 
     // world creation
     socket.on('create custom world', function(input, callback) {
@@ -181,12 +288,24 @@ const initialize = function() {
               callback("error", "World name is too long.");
               return;
             }
+            if (parsedPacket.description.length < 500) {
+              callback("error", "Description is too long. 500 characters max.");
+              return;
+            }
             if (socket.accountData.worlds.length < 10) {
               callback("error", "World limit exceeded. You can only have a maximum amount of 10 worlds.");
               return;
             }
+            if (socket.accountData.currency < 50) {
+              callback("error", "50 gold is required to create a world.");
+              return;
+            }
+            if (!isDictionary(parsedPacket.settings)) {
+              callback("error", "Provided settings was not a dictionary.")
+              return;
+            }
 
-            let worldID = socket.accountData.id + "/" + generateUUID()
+            let worldID = socket.accountData.id + "-" + generateUUID()
             let world = {
               worldName: parsedPacket.name,
               description: parsedPacket.description,
@@ -198,6 +317,7 @@ const initialize = function() {
               hasCustomWorldID: false
             }
             socket.accountData.worlds.push(world);
+            socket.accountData.addCurrency(-50);
             callback("success", world);
             return;
           }

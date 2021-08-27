@@ -1,7 +1,7 @@
 const recipes = {
   "Oak Planks": {
     yieldItem: "Oak Planks",
-    yieldCount: 4,
+    count: 4,
     recipe: [
       {
         item: "Oak Log",
@@ -13,7 +13,7 @@ const recipes = {
     description: "Great and easy-to-craft starting building block!"
   },
   "Birch Planks": {
-    yieldCount: 4,
+    count: 4,
     yieldItem: "Birch Planks",
     recipe: [
       {
@@ -26,7 +26,7 @@ const recipes = {
     description: "Great and easy-to-craft starting building block!"
   },
   "Stone Bricks": {
-    yieldCount: 1,
+    count: 1,
     yieldItem: "Stone Bricks",
     recipe: [
       {
@@ -95,7 +95,7 @@ const recipes = {
       }
     ],
     display: "Weapons/Diamond Greatsword",
-    description: "Extremely strong melee weapon! Deals 20 damage for every hit."
+    description: "Extremely strong melee weapon! Deals 30 damage for every hit."
   },
   "Corrupted Katana": {
     count: 1,
@@ -125,9 +125,9 @@ const recipes = {
         display: "Weapons/Guardian's Doomblade"
       },
       {
-        item: "Knight's Edge",
+        item: "Night's Edge",
         count: 1,
-        display: "Weapons/Knight's Edge"
+        display: "Weapons/Night's Edge"
       },
       {
         item: "Amber",

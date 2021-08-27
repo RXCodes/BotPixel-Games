@@ -24,7 +24,9 @@ const weapons = require('./weapons');
 const weaponData = weapons.weapons();
 const effects = require("./effects");
 const crafting = require("./crafting");
+const creative = require("./creative");
 const craftingRecipes = crafting.recipes();
+const creativeBlocksJSON = creative.blocks();
 crateLoot.setup();
 gameHandler.initialize();
 
@@ -79,10 +81,15 @@ io.on('connection', function(socket) {
   io.to(socket.id).emit('weapon data', weaponData);
   io.to(socket.id).emit("effect status data", effects.effects());
   io.to(socket.id).emit("crafting recipe", craftingRecipes);
+  io.to(socket.id).emit("creative blocks", creativeBlocksJSON);
 	socket.uuid = socket.id;
 	socket.matchmaking = false;
 	socket.ingame = false;
 	socket.name = 'Guest';
+
+  socket.on('device check', function(input, callback) {
+    callback(socket.request.headers);
+  });
 
 	socket.on('verify', function(input, callback) {
 		if (input == secret) {

@@ -332,12 +332,12 @@ startMatch = function(world, uuid, players, settings) {
         let self = this;
         let i = inventory.give(this.inventory, item, count);
         this.inventory = i.inventory;
-        if (i.leftover) {
-          summonItem(self.worldUUID, self.x, self.y, item, i.leftover);
+        if (i.leftOver > 0) {
+          summonItem(self.worldUUID, self.x, self.y, item, i.leftOver);
         }
       },
       hasItem: function(item, count = 1) {
-        this.inventory.forRach(function(slotData) {
+        this.inventory.forEach(function(slotData) {
           if (slotData.name == item) {
             count--;
           }
@@ -366,8 +366,8 @@ startMatch = function(world, uuid, players, settings) {
             this.inventory.forEach(function(item) {
               Object.keys(itemsToRemove).forEach(function(itemName) {
                 if (item.name == itemName) {
+                  let i = inventory.remove(self.inventory, invIndex, itemsToRemove[itemName]);
                   itemsToRemove[itemName] -= item.count;
-                  let i = inventory.remove(self.inventory, invIndex, itemName, itemsToRemove[itemName]);
                   self.inventory = i.inventory;
                   if (itemsToRemove[itemName] <= 0) {
                     delete itemsToRemove[itemName];
@@ -376,7 +376,9 @@ startMatch = function(world, uuid, players, settings) {
               });
               invIndex++;
             })
-            self.give(recipe, recipeItem.yieldCount);
+            self.give(craftingRecipesJSON[recipe].yieldItem, craftingRecipesJSON[recipe].count);
+            io.to(self.uuid).emit("update inventory", self.inventory);
+            io.to(self.uuid).emit("craft", recipe);
           }
         }
       },
@@ -474,8 +476,10 @@ startMatch = function(world, uuid, players, settings) {
         } 
       },
 			addToStat: function(stat, amount) {
-				this.stats[stat] = this.stats[stat] || 0;
-				this.stats[stat] += amount;
+        if (games[this.worldUUID].creative !== true) {
+				  this.stats[stat] = this.stats[stat] || 0;
+				  this.stats[stat] += amount;
+        }
 			},
 			startEat: function(slot) {
 				if (this.inventory[slot] && slot >= 0) {
@@ -506,7 +510,7 @@ startMatch = function(world, uuid, players, settings) {
 					}
 				}
 			},
-			cancelEat: function(slot) {
+			cancelEat: function() {
 				if (this.eating) {
 					this.eating = false;
 					clearTimeout(this.eatTimer);
@@ -556,8 +560,8 @@ startMatch = function(world, uuid, players, settings) {
             }
 						let coordinates = position.split(',');
 						io.to(this.worldUUID).emit('Pick Up Item', {
-							x: parseInt(coordinates[0]),
-							y: parseInt(coordinates[1]),
+							x: coordinates[0],
+							y: coordinates[1],
 							type,
 							item: item.name,
 							uuid: this.uuid
@@ -606,11 +610,11 @@ startMatch = function(world, uuid, players, settings) {
 				}
 			},
 			addToHealth: function(add, event = {}, effect = 'None') {
-				if (!(games[this.worldUUID] || {}).winnerDeclared) {
+				if (!(games[this.worldUUID] || {}).settings.creative) {
 					this.health += add;
 					this.health = Math.max(this.health, 0);
 					this.health = Math.min(this.health, 100);
-					if (add < 0) {
+					if (add < 0 && !(games[this.worldUUID] || {}).winnerDeclared) {
 						this.healthRegenDelay = 100;
 						let worldUUID = this.worldUUID;
 						let uuid = this.uuid;
@@ -1166,7 +1170,7 @@ const placeBlock = function(worldUUID, x, y, block, blockData = {}) {
 		position
 	});
 	games[worldUUID].world[position] = block;
-	if (!blocksJSON[block].passable) {
+	if (!(blocksJSON[block] || {}).passable) {
 		games[worldUUID].collisions[position] = true;
 		games[worldUUID].blockCost[position] = blocksJSON[block].blockCost;
 	}
@@ -1382,6 +1386,38 @@ io.on('connection', function(socket) {
       }
     }
     callback("done");
+  });
+  socket.on("set inventory", function(input, callback) {
+    if (socket.ingame && isDictionary(input)) {
+      if (referPlayer(socket.room, socket.id).alive) {
+        let pass = true;
+        let parsedInput = JSON.parse(input);
+        try {
+          let array = JSON.parse(JSON.stringify(parsedInput));
+          array.push("test");
+        } catch(e) {
+          pass = false;
+        }
+        if (socket.creative && pass) {
+          let inventory = [];
+          parsedInput.forEach(function(item) {
+            try {
+              item = JSON.parse(item);
+            } catch(e) {
+              // item cannot be parsed further
+            }
+            inventory.push({
+              name: item.name,
+              count: parseInt(item.count),
+              type: item.type,
+              isRenamed: item.renamed || 0,
+              displayName: item.displayName
+            })
+          });          
+				  referPlayer(socket.room, socket.id).inventory = inventory;
+        }
+			}
+    }
   });
   socket.on("weapon attack", function(input, callback) {
     if (socket.ingame && isDictionary(input)) {
@@ -1633,10 +1669,10 @@ const match = function(game) {
 
 	// random disaster event
 	const disasterEvent = function(difficulty) {
-		let events = ['Meteor Shower'];
+		let events = ['Meteor Shower', 'Acid Rain'];
 		if (Math.random() < difficulty) {
 			// randomly pick event
-			let index = Math.floor(Math.random() * (events.length - 1));
+			let index = Math.round(Math.random() * (events.length - 1));
 			let event = events[index];
 			if (game.currentDisasterEvents[event] == undefined) {
 				let eventData = {
